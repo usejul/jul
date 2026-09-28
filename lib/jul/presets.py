@@ -63,8 +63,9 @@ class Preset:
     asset_dir: Path = field(default=ASSETS, compare=False)
     #: What `jul models add` measured, for `jul models` to show. Not used at inference.
     calibration: dict | None = field(default=None, compare=False, hash=False)
-    #: "vector" (formulations, layers, tau) or "pointer": a decision model read with the format stored
-    #: in its own decision.json (jul/decision.py); formulations and tau are then unused.
+    #: "vector" (formulations, layers, tau), "pointer": a decision model read with the format stored
+    #: in its own decision.json (jul/decision.py), or "contrastive": projection heads on a frozen
+    #: encoder, CLM-8B's method (jul/contrastive.py). Formulations and tau are unused by the last two.
     method: str = "vector"
     #: On a pointer preset: the vector reading a long question falls back to, fitted by `jul models add`
     #: on these very weights (formulations, tau, center) plus `above_options`. None = no routing.
@@ -72,6 +73,9 @@ class Preset:
     #: A cross model that answers some question types instead of the vector reading (jul/cross.py):
     #: {"repo": <directory or Hub repo, or {backend: repo}>, "subfolder": <optional>}. None = vectors only.
     cross: dict | None = field(default=None, compare=False, hash=False)
+    #: On a "contrastive" preset (jul/contrastive.py): the directory holding contrastive.json and the
+    #: heads, written by `jul models add` from a CLM checkpoint. The repos are the frozen backbone's.
+    heads: str | None = None
 
     @property
     def layers(self) -> list[int]:
@@ -102,7 +106,8 @@ class Preset:
                 "one_word": list(self.one_word) if self.one_word else None,
                 "latency_ms": self.latency_ms, "quality": self.quality, "notes": self.notes,
                 "calibration": self.calibration, "method": self.method, "routing": self.routing,
-                **({"cross": self.cross} if self.cross else {})}
+                **({"cross": self.cross} if self.cross else {}),
+                **({"heads": self.heads} if self.heads else {})}
 
     @classmethod
     def from_json(cls, d: dict, asset_dir: Path) -> "Preset":
@@ -115,7 +120,7 @@ class Preset:
                    latency_ms=d.get("latency_ms", "?"), quality=d.get("quality", ""),
                    notes=d.get("notes", ""), backend=d.get("backend"), asset_dir=asset_dir,
                    calibration=d.get("calibration"), method=d.get("method", "vector"),
-                   routing=d.get("routing"), cross=d.get("cross"))
+                   routing=d.get("routing"), cross=d.get("cross"), heads=d.get("heads"))
 
 
 def formulations_for(preset: Preset, names) -> tuple[Formulation, ...]:
@@ -181,6 +186,24 @@ def pointer_preset(name: str, repo: str, backend: str) -> Preset:
     return Preset(name=name, **repo_fields(backend, repo), backend=backend, formulations=(), tau=1.0,
                   latency_ms="?", quality="decision model (pointer method)", method="pointer",
                   notes=f"format and temperature ({spec.temperature:.3f}) read from {repo}/decision.json")
+
+
+def contrastive_preset(name: str, heads_dir: str | Path, backend: str) -> Preset:
+    """A contrastive model's preset (CLM-8B): the backbone's repos and the directory of its heads.
+
+    Nothing is fitted: the scale comes with the heads. Every backend the heads name a backbone for is
+    listed, so one `jul models add` serves MLX and torch alike.
+    """
+    from .contrastive import ContrastiveSpec
+    spec = ContrastiveSpec.load(heads_dir)
+    if backend not in spec.backbone:
+        raise ValueError(f"{heads_dir}: no {backend} backbone for these heads "
+                         f"(has {', '.join(spec.backbone)}); pass --backbone at conversion")
+    return Preset(name=name, repo=spec.backbone.get("mlx", ""), torch_repo=spec.backbone.get("torch"),
+                  backend=backend, formulations=(), tau=1.0, latency_ms="?",
+                  quality="contrastive heads on a frozen encoder (CLM method)", method="contrastive",
+                  heads=str(Path(heads_dir).resolve()),
+                  notes=f"heads {spec.source}, scale {spec.scale:.2f}, backbone {spec.backbone.get(backend)}")
 
 
 def routing_from(fitted: Preset, above_options: int) -> dict:

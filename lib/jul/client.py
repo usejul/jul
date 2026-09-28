@@ -157,6 +157,20 @@ class TypeSafeClient:
             return SystemOneResponse(answers={n: answers[n] for n in questions}, model=self._preset.name,
                                      usage=Usage(input_tokens=tokens), request_id=str(uuid.uuid4()))
 
+        if engine.contrastive is not None:
+            # Projection heads on a frozen encoder (CLM-8B): one embedding of state + instructions per
+            # question, the option embeddings cached. A head from `autotune` reads that same embedding.
+            for name, question in questions.items():
+                kind, options = _kind_of(question), options_of(question)
+                logits, embedding, spent = engine.contrastive.read(state, kind, question.instructions, options)
+                tokens += spent
+                head = self._head(ctx, kind, question, options)
+                probabilities = (tuning.apply(head, embedding) if head is not None
+                                 else self._calibrated(ctx, kind, question, options, logits))
+                answers[name] = _format(kind, question, options, probabilities)
+            return SystemOneResponse(answers=answers, model=self._preset.name, usage=Usage(input_tokens=tokens),
+                                     request_id=str(uuid.uuid4()))
+
         for name, question in questions.items():
             kind = _kind_of(question)
             options = options_of(question)
@@ -251,6 +265,15 @@ class TypeSafeClient:
         states = [serialize_state(s) for s, _ in labeled]
         reports: dict[str, tuning.TuningReport] = {}
         features_mode = features
+        if engine.contrastive is not None:
+            if features != "vector" or formulations:
+                raise ValueError(f"{self._preset.name!r} is a contrastive model: its heads read the encoder "
+                                 "embedding only (features='vector', no formulations)")
+            for name, question in questions.items():
+                reports[name] = self._autotune_contrastive(engine, ctx, name, question, labeled)
+            if save and ctx.name:
+                ctx.save(home=self._context_home)
+            return reports
 
         for name, question in questions.items():
             kind = _kind_of(question)
@@ -291,6 +314,28 @@ class TypeSafeClient:
         if save and ctx.name:
             ctx.save(home=self._context_home)
         return reports
+
+    def _autotune_contrastive(self, engine: Engine, ctx: Context, name: str, question: Question,
+                              labeled: list) -> tuning.TuningReport:
+        """autotune on a contrastive model: the head is trained on the encoder embedding of
+        state + instructions (what the state head reads), judged against the CLM heads' own answers."""
+        kind, options = _kind_of(question), options_of(question)
+        index = {o.key: i for i, o in enumerate(options)}
+        rows = [(s, _answer_index(kind, a[name], index)) for s, a in labeled if name in a]
+        if len(rows) < 2:
+            raise ValueError(f"question {name!r} has fewer than 2 labeled examples")
+        read = [engine.contrastive.read(s, kind, question.instructions, options) for s, _ in rows]
+        scores = np.stack([z for z, _, _ in read])
+        features = np.stack([e for _, e, _ in read])
+        y = np.array([label for _, label in rows])
+        digest = self._digest(kind, question, options)
+        head, report = tuning.train(features, y, scores, [o.key for o in options], name, self._preset.name)
+        ctx.calibration[digest] = fit_temperature_bias(scores, y)
+        if head is not None:
+            ctx.heads[digest] = head
+        else:
+            ctx.heads.pop(digest, None)
+        return report
 
 
 class AsyncTypeSafeClient(TypeSafeClient):

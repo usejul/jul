@@ -221,6 +221,58 @@ Two differences with the presets above: `autotune(...)` does not apply (its head
 vectors of the other method, and such a model needs a full fine-tune instead), and a state longer than
 the limit in its `decision.json` is truncated rather than stretched.
 
+## Contrastive models (CLM-8B)
+
+[CLM-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B) is not a model of its own: two small
+projection heads (19 M parameters, 75 MB) trained with InfoNCE on top of a **frozen** Qwen3-8B, read at
+its last token. The state, with the question's instructions after a blank line, goes through the state
+head; each option through the action head; the score is `scale * cosine` and a softmax gives the answer.
+The heads mean nothing without that exact backbone, so `jul` runs Qwen3-8B itself and reads the heads
+in numpy (no torch at inference, no vLLM server):
+
+```bash
+jul models add clm-8b --repo Contrastive-LM/CLM-v0.1-8B    # converts the .pt once (needs torch)
+jul ask choice "Which team should handle this?" -o "billing:Charges, invoices, refunds" \
+    -o "technical:Bugs and outages" --state "my invoice was charged twice" --model clm-8b
+```
+
+`jul models add` recognises a CLM repo by its `config.json` (`"model_type": "clm"`), converts the
+checkpoint into `~/.jul/heads/<name>/` (`contrastive.json` + `heads.npz`) and writes a preset whose
+repos are the backbone's: `Qwen/Qwen3-8B` (bf16, 16 GB) on torch, `mlx-community/Qwen3-8B-8bit`
+(8.7 GB) on MLX. `python -m jul.contrastive convert <.pt or repo> <dir> --backbone-mlx <repo>` picks
+another backbone; `jul models add <name> --repo <dir>` then registers that directory.
+
+The texts are CLM's own (`schema.build_pairs`), not jul's formulations: objects rendered as `key: value`
+fields, options verbatim, a Noul without descriptions read as CLM's `"true: Yes. This is true: <question>"`.
+On CLM's reference requests the MLX 8-bit backbone answers as its bf16 vLLM server does (M1 Pro):
+
+| Request | CLM, bf16 vLLM | jul, MLX 8-bit | jul, MLX 4-bit |
+| --- | ---: | ---: | ---: |
+| "charged twice…", Noul urgent | 0.840-0.848 | 0.865 | 0.713 |
+| same, Choice billing | 0.987-0.989 | 0.991 | 0.985 |
+| same, Score frustration (0-2) | 2.000 | 2.000 | 2.000 |
+| "I'm very calm.", Score frustration | 1.999 ([issue #3](https://github.com/Contrastive-LM/CLM/issues/3)) | 1.998 | 1.999 |
+| tides, Choice "the Moon" | 0.993 | 0.993 | 0.994 |
+
+4-bit keeps every argmax but moves the Noul by 0.13, hence 8-bit by default. A warm call with the
+options cached takes ~210 ms on an M1 Pro: every question embeds `state + instructions` once, since the
+state head reads the question too.
+
+`autotune` works: the head is trained on the encoder embedding of `state + instructions` (the vector the
+state head reads), judged against the CLM heads' own answers, and a question keeps CLM's answer when the
+head does not beat it. `jul pack` does not apply (vector method only).
+
+On the Jev bench (`scripts/bench_jul.py clm-8b zero-shot,tuned`, M1 Pro, MLX 8-bit):
+
+| | AG News | Banking77 | Emotion | Mean acc | Mean ECE | p50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `clm-8b` zero-shot | 0.55 | 0.08 | 0.22 | 0.283 | 0.208 | 217 ms |
+| `clm-8b` + autotune (1000 labels) | 0.92 | 0.58 | 0.45 | 0.650 | 0.117 | 217 ms |
+
+Zero-shot it collapses onto a few labels (Banking77's 77 options, Emotion), as it does behind its own
+vLLM server (0.53 / 0.08 / 0.23 measured there, torch bf16 on CPU): the port is faithful, the heads are
+what they are. Jev scores 0.753, `wemm-4b-4bit` 0.857.
+
 ## The built-in presets
 
 | Preset                          | Model                               | Layers  |    tau | p50, M4 Pro | p50, M5 Max | Jev bench, zero-shot |

@@ -253,6 +253,8 @@ def cmd_models(a):
         print(f"\n{name} ({backend}): " + ", ".join(f"{b} {r}" for b, r in p.repos.items()))
         if p.method == "pointer":
             print("  method: pointer (decision model; format, head and temperature in its decision.json)")
+        elif p.method == "contrastive":
+            print(f"  method: contrastive (projection heads in {p.heads})")
         else:
             print("  formulations: " + ", ".join(f"{f.name}@layer{f.layer}" for f in p.formulations)
                   + f", tau={p.tau}, center={p.center}")
@@ -282,6 +284,34 @@ def _with_cross(preset, cross):
     return dataclasses.replace(preset, cross=entry)
 
 
+def _add_contrastive(a):
+    """CLM-8B and its kind: projection heads on a frozen encoder. Nothing to fit; the checkpoint is
+    converted once into ~/.jul/heads/<name> (needs torch, to read the .pt) unless it already is."""
+    from pathlib import Path as _P
+
+    from jul.backbone import resolve_backend
+    from jul.contrastive import SPEC_FILE, convert
+    from jul.home import JUL_HOME
+    from jul.presets import contrastive_preset, save_preset
+    backend = resolve_backend(a.backend)
+    if (_P(a.repo) / SPEC_FILE).exists():
+        heads = _P(a.repo)
+    else:
+        heads = JUL_HOME / "heads" / a.name
+        print(f"{a.name}: converting the heads of {a.repo} into {heads}")
+        convert(a.repo, heads)
+    try:
+        preset = contrastive_preset(a.name, heads, backend)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}") from exc
+    path = save_preset(preset)
+    print(f"{a.name}: contrastive heads on a frozen encoder, backbone {preset.repos[backend]} on {backend}"
+          f" -> {path}")
+    print(f"  {preset.notes}")
+    print(f"\nUse it: jul ask ... --model {a.name} --backend {backend}"
+          f"   (the backbone downloads on first use)")
+
+
 def cmd_models_add(a):
     from jul.calibrate import CalibrationError, calibrate
     if not a.name:
@@ -300,6 +330,9 @@ def cmd_models_add(a):
         path = save_preset(dataclasses.replace(_with_cross(preset, a.cross), backend=preset.backend or backend))
         print(f"{a.name} on {backend}: cross model attached -> {path}")
         return
+    from jul.contrastive import is_clm_repo
+    if a.repo and is_clm_repo(a.repo):
+        return _add_contrastive(a)
     from jul.decision import spec_source
     source = spec_source(a.repo) if a.repo else None
     if source:

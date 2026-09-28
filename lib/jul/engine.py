@@ -114,6 +114,12 @@ class Engine:
         if preset.method == "pointer":
             from .decision import DecisionSpec, PointerReader
             self.pointer = PointerReader(backbone, DecisionSpec.load(backbone.model_dir))
+        self.contrastive = None
+        if preset.method == "contrastive":
+            from .contrastive import ContrastiveReader, ContrastiveSpec
+            if not preset.heads:
+                raise ValueError(f"{preset.name!r}: a contrastive preset needs its heads directory")
+            self.contrastive = ContrastiveReader(backbone, ContrastiveSpec.load(preset.heads))
         self.cross = None
         if preset.cross:
             from . import cross

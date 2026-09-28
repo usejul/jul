@@ -85,8 +85,9 @@ def pack(client, questions: dict, out: str | Path, context=None, model: str | No
 
     ctx = resolve_context(context, client._context_home) if context is not None else client.context
     engine = client._engine_for(model)
-    if engine.pointer is not None:
-        raise ValueError(f"{client.model!r} is a decision model (pointer method): only the vector method packs")
+    if engine.pointer is not None or engine.contrastive is not None:
+        raise ValueError(f"{client.model!r} is read with the {client._preset.method} method: "
+                         "only the vector method packs")
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     prompts: list[tuple[str, str]] = []
