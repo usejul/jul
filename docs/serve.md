@@ -65,6 +65,30 @@ All optional, and ignored by a Jev client:
 - in the response, a `jul` object with the latency;
 - the `/health` route and the `/v1/classify` alias.
 
+## Escalation: local first, a bigger decider when unsure
+
+`--escalate-to` hands the questions answered below `--min-confidence` to another System One server
+(Jev, Ollama with Nimble or Tev1, Kev, another `jul serve`), and only those. Its key is read from
+`$JUL_ESCALATE_API_KEY`, never from the command line.
+
+```bash
+JUL_ESCALATE_API_KEY=... jul serve --escalate-to https://api.typesafe.ai --min-confidence 0.8
+```
+
+The response says, per question, which tier answered:
+
+```json
+"jul": {"escalation": {"team": {"tried": ["local", "remote"], "tier": "remote", "confidence": 0.91, "met_bar": true}}}
+```
+
+A Choice or Score counts its `confidence`, a Noul `max(noul, 1 - noul)`. The tier escalated to keeps
+the question even when it is less sure (two models' confidences are not comparable); `met_bar` says
+whether the kept answer cleared the bar. A tier that fails is skipped and its error recorded. In
+Python, `jul.Escalation` chains any number of tiers, with a bar per question if needed.
+
+The state of an escalated question leaves the machine. The bar is a policy, not a measurement: check
+what it lets through on labeled examples of your own.
+
 ## Security and privacy
 
 The server binds to 127.0.0.1 by default: local only, the same on-device promise as the library. To

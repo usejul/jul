@@ -12,6 +12,7 @@ head trained in seconds on labeled examples while the model itself stays untouch
 from .client import AsyncTypeSafeClient, TypeSafeClient
 from .bundle import Bundle, pack
 from .context import Context
+from .escalate import EscalatedResponse, Escalation, SystemOneHTTP
 from .presets import PRESETS, Preset
 from .tuning import TuningReport
 from .types import (Choice, ChoiceAnswer, Noul, NoulAnswer, NoulCriteria, Score, ScoreAnswer,
@@ -26,5 +27,5 @@ __all__ = [
     "TypeSafeClient", "AsyncTypeSafeClient",
     "Choice", "Noul", "NoulCriteria", "Score",
     "ChoiceAnswer", "NoulAnswer", "ScoreAnswer", "SystemOneResponse", "Usage",
-    "Context", "TuningReport", "Preset", "PRESETS", "Bundle", "pack", "__version__",
+    "Context", "Escalation", "EscalatedResponse", "SystemOneHTTP", "TuningReport", "Preset", "PRESETS", "Bundle", "pack", "__version__",
 ]

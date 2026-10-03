@@ -26,7 +26,8 @@ JuL additions, all optional and ignored by Jev clients:
 
 - request: `context` (name of a saved context), `method`, `route_above`, as in `system_one`;
   a Choice's `criteria` may also be a plain list of keys, as in the library.
-- response: `jul: {"latency_ms": ...}`.
+- response: `jul: {"latency_ms": ...}`, plus `jul.escalation` (which tier answered each question)
+  when the server escalates (`--escalate-to`).
 - routes: `GET /health`; `POST /v1/classify` is an alias of `/v1/systemone`.
 
 Binds to 127.0.0.1 by default (local only). Bound elsewhere with `--host`, it should be given a key
@@ -59,6 +60,8 @@ _default_model: str | None = None
 _default_backend: str | None = None
 #: When set, every request must carry it. None means no authentication (safe only on loopback).
 _api_key: str | None = None
+#: Optional escalation: unsure answers go to another System One server (see jul/escalate.py).
+_escalate: dict | None = None
 
 MAX_BODY = 10_000_000
 SYSTEMONE_PATHS = ("/v1/systemone", "/v1/classify", "/classify")
@@ -92,6 +95,13 @@ def get_client():
             # Forces the weights to load now, so the first real request is not the slow one.
             client.system_one(state="warmup",
                               questions={"q": Choice(instructions="test?", criteria={"a": "a", "b": "b"})})
+            if _escalate:
+                from jul.escalate import Escalation, SystemOneHTTP
+                remote = SystemOneHTTP(_escalate["url"], model=_escalate["model"], api_key=_escalate["api_key"])
+                client = Escalation([("local", client), ("remote", remote)],
+                                    min_confidence=_escalate["min_confidence"])
+                logger.info("escalating answers below %.2f to %s (%s)", _escalate["min_confidence"],
+                            remote.url, _escalate["model"])
             _client = client
             logger.info("JuL client ready in %.1fs", time.time() - start)
     return _client
@@ -190,7 +200,7 @@ def classify(body: Any) -> dict:
     # Log answer summary (DEBUG to avoid leaking sensitive data)
     answers_summary = {k: _answer_summary(v) for k, v in result.get("answers", {}).items()}
     logger.debug("answers: %s", answers_summary)
-    result["jul"] = {"latency_ms": round(latency_ms, 2)}
+    result["jul"] = {**result.get("jul", {}), "latency_ms": round(latency_ms, 2)}
     return result
 
 
@@ -292,10 +302,17 @@ def make_server(host: str = "127.0.0.1", port: int = 8577) -> ThreadingHTTPServe
 
 def serve(model: str | None = None, backend: str | None = None,
           host: str = "127.0.0.1", port: int = 8577, warmup: bool = True,
-          api_key: str | None = None) -> None:
-    """Run the server until interrupted. See the module docstring for the protocol."""
-    global _default_model, _default_backend, _api_key
+          api_key: str | None = None, escalate_to: str | None = None, escalate_model: str = "jev-latest",
+          min_confidence: float = 0.8) -> None:
+    """Run the server until interrupted. See the module docstring for the protocol.
+
+    `escalate_to` (a System One server root) sends the answers below `min_confidence` there; its key
+    is read from $JUL_ESCALATE_API_KEY, never from the command line.
+    """
+    global _default_model, _default_backend, _api_key, _escalate
     _default_model, _default_backend = model, backend
+    _escalate = ({"url": escalate_to, "model": escalate_model, "min_confidence": min_confidence,
+                  "api_key": os.environ.get("JUL_ESCALATE_API_KEY") or None} if escalate_to else None)
     _api_key = api_key or os.environ.get("JUL_API_KEY") or None
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 

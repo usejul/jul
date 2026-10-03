@@ -7,6 +7,10 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
 
 ### Added
 
+- **Escalation on confidence**: `jul.Escalation` chains deciders (a local client, then `SystemOneHTTP` for
+  any `/v1/systemone` server: Jev, Ollama's Nimble, Kev, another `jul serve`); only the questions answered
+  below the bar go on to the next one, and the response says per question which tier answered.
+  `jul serve --escalate-to URL --min-confidence 0.8` does the same over HTTP.
 - **`jul-decision-wemm-4b` is the default model** (alias `accurate`): `wemm-4b-4bit` plus LoRA adapters
   ([`usejul/jul-decision-wemm-4b`](https://huggingface.co/usejul/jul-decision-wemm-4b)) that read Noul,
   Score and Choice with the question and the text together. Decision bench (2,108 questions, PyTorch): 0.849,

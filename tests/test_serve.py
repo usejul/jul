@@ -175,3 +175,13 @@ def test_a_single_option_choice_is_accepted(server):
     status, out = call(url + "/v1/systemone", body)
     assert status == 200 and out["answers"]["action"]["choice"] == "click"
     assert list(fake.calls[-1]["questions"]["action"].criteria) == ["click"]
+
+
+def test_escalation_trace_survives_the_latency(monkeypatch):
+    """With --escalate-to, the server's client is an Escalation; its trace stays next to the latency."""
+    from jul import Escalation
+
+    fake = Escalation([("local", FakeClient())], min_confidence=0.5)
+    monkeypatch.setattr(S, "_client", fake)
+    out = S.classify(JEV_REQUEST)
+    assert out["jul"]["escalation"]["queue"]["tier"] == "local" and "latency_ms" in out["jul"]
