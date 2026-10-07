@@ -75,3 +75,14 @@ def test_minicpm_ships_a_preset_fitted_on_torch():
     assert preset.backend == "torch" and preset.center == "generic"
     assert preset.generic_center(preset.formulations[0], "torch") is not None
     assert resolve("minicpm5-2b", "mlx") is resolve("minicpm5-2b")
+
+
+def test_minicpm5_1b_is_built_in_on_both_backends():
+    """Fitted by `jul models add minicpm5-1b` on MLX (built in) and on torch (shipped asset)."""
+    mlx, torch = resolve("minicpm5-1b"), resolve("minicpm5-1b", "torch")
+    assert mlx.repos == {"mlx": "openbmb/MiniCPM5-1B-MLX", "torch": "openbmb/MiniCPM5-1B"}
+    assert torch.backend == "torch" and torch.repos["torch"] == "openbmb/MiniCPM5-1B"
+    for preset, backend in ((mlx, "mlx"), (torch, "torch")):
+        assert preset.center == "generic"
+        assert preset.generic_center(preset.formulations[0], backend) is not None
+    assert one_word_preset("minicpm5-1b").formulations[0].layer == 21

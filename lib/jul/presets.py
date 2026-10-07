@@ -265,6 +265,22 @@ PRESETS: dict[str, Preset] = {
               "asset covers 'one_word'; 'question_options' falls back to the mean of the option "
               "vectors, which measured 0.535 overall.",
     ),
+    # MiniCPM5-1B (1.08B, Apache-2.0), read like minicpm5-2b. Fitted by `jul models add` on 2026-10-07:
+    # layers 23 / 20 (of 24), center generic, tau 0.0532, dev accuracy 0.460 +/- 0.035 (n=200), 0.530
+    # with a task center. The torch fit ships as assets/presets/minicpm5-1b@torch.json.
+    "minicpm5-1b": Preset(
+        name="minicpm5-1b",
+        repo="openbmb/MiniCPM5-1B-MLX",
+        torch_repo="openbmb/MiniCPM5-1B",
+        formulations=(Formulation("one_word", ONE_WORD, 23),
+                      Formulation("question_options", QUESTION_OPTIONS, 20)),
+        tau=0.0532,
+        latency_ms="~57",
+        quality="dev accuracy 0.460 ± 0.035 (n=200); not measured on the Jev bench",
+        center="generic",
+        notes="The smallest MiniCPM5, half of minicpm5-2b (dev accuracy 0.540 on torch). Centering "
+              "measured on the dev sets: generic 0.453 > options 0.413 > none 0.408.",
+    ),
 }
 
 # WeMM-Embedding-4B read as above, plus LoRA adapters on its own layers (usejul/jul-decision-wemm-4b) that
@@ -305,7 +321,7 @@ PRESETS["jul-decision-minicpm5-2b"] = Preset(
 )
 
 #: Single-formulation variants, kept because they are what the 'one word' rows of the bench measured.
-ONE_WORD_ONLY: dict[str, tuple[int, float]] = {"minicpm5-2b": (39, 0.04554)}
+ONE_WORD_ONLY: dict[str, tuple[int, float]] = {"minicpm5-2b": (39, 0.04554), "minicpm5-1b": (21, 0.04643)}
 
 ALIASES = {"fast": "jul-decision-minicpm5-2b", "accurate": "jul-decision-wemm-4b"}
 DEFAULT_MODEL = "jul-decision-wemm-4b"

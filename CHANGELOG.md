@@ -3,6 +3,15 @@
 Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag releases to PyPI, every push to
 `main` publishes a dev build to TestPyPI.
 
+## Unreleased
+
+### Added
+
+- **`minicpm5-1b`** is built in: [MiniCPM5-1B](https://huggingface.co/openbmb/MiniCPM5-1B) (1.08B, Apache-2.0),
+  read with vectors like `minicpm5-2b`. Fitted by `jul models add` on MLX (`openbmb/MiniCPM5-1B-MLX`, layers
+  23 / 20, tau 0.0532, dev accuracy 0.460 ± 0.035) and on PyTorch (layers 23 / 21, tau 0.0464, dev accuracy
+  0.515 ± 0.035), both with the generic center.
+
 ## 0.5.1 — 2026-10-07
 
 ### Fixed
