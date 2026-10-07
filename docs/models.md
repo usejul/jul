@@ -2,7 +2,7 @@
 
 ## Every model measured
 
-Jev scores 0.753 on the same benchmark. `wemm-4b-4bit` and `minicpm5-2b` are built in; any other is
+Jev scores 0.753 on the same benchmark. `wemm-4b-4bit`, `minicpm5-2b` and `minicpm5-1b` are built in; any other is
 one command away,
 `jul models add <name> --repo <repository>`, which fits it on the dev sets.
 
@@ -454,6 +454,7 @@ what they are. Jev scores 0.753, `wemm-4b-4bit` 0.857.
 | `wemm-4b-4bit`                  | `usejul/WeMM-Embedding-4B-mlx-4bit` | 31 / 31 | 0.0553 |      146 ms |       55 ms | **0.857**            |
 | `minicpm5-2b`                   | `openbmb/MiniCPM5-2B-MLX`           | 39 / 40 | 0.0413 |   **64 ms** |             | 0.617                |
 | `jul-decision-minicpm5-2b` (alias `fast`) | `usejul/jul-decision-minicpm5-2b-mlx-4bit` | pointer; Score 38 / 37 | 0.0474 | ~90 ms | | — (0.680 on our 300-question bench) |
+| `minicpm5-1b`                   | `openbmb/MiniCPM5-1B-MLX`           | 23 / 20 | 0.0532 |             |             | — (dev accuracy 0.460 ± 0.035; 57 ms on an M4) |
 
 `wemm-4b-4bit` is the most accurate vector reading: 10 points above Jev with no training. The default,
 `jul-decision-wemm-4b`, is the same preset plus [LoRA adapters](#a-cross-model-on-the-presets-own-weights-lora)
