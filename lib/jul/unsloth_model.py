@@ -21,6 +21,8 @@ not run decision models on a Mac.
 
 from __future__ import annotations
 
+import contextlib
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -83,15 +85,18 @@ class UnslothModel:
     def _load(self) -> tuple[Any, Any, Any]:
         with self._lock:
             if self._loaded is None:
-                try:
-                    from unsloth import FastDecisionModel  # noqa: PLC0415 - optional dependency
-                except ImportError as e:
-                    raise ImportError(f"{self.name!r} needs the unsloth package: pip install 'jul[unsloth]'") from e
-                if _has_head(self.checkpoint) is False:
-                    raise ValueError(f"{self.checkpoint!r} is not an Unsloth decision model (no decision head: "
-                                     f"none of {', '.join(HEAD_FILES)}); train one with Unsloth first")
-                model, tokenizer = FastDecisionModel.from_pretrained(self.checkpoint)
-                FastDecisionModel.for_inference(model)
+                # Unsloth prints its banner and patch notes on stdout: keep them on stderr, so that `jul ask`
+                # prints only its JSON there.
+                with contextlib.redirect_stdout(sys.stderr):
+                    try:
+                        from unsloth import FastDecisionModel  # noqa: PLC0415 - optional dependency
+                    except ImportError as e:
+                        raise ImportError(f"{self.name!r} needs the unsloth package: pip install 'jul[unsloth]'") from e
+                    if _has_head(self.checkpoint) is False:
+                        raise ValueError(f"{self.checkpoint!r} is not an Unsloth decision model (no decision head: "
+                                         f"none of {', '.join(HEAD_FILES)}); train one with Unsloth first")
+                    model, tokenizer = FastDecisionModel.from_pretrained(self.checkpoint)
+                    FastDecisionModel.for_inference(model)
                 self._loaded = (FastDecisionModel, model, tokenizer)
             return self._loaded
 

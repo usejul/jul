@@ -44,6 +44,7 @@ class FakeFast:
         self.answers, self.loads, self.calls, self.inference = answers, [], [], []
 
     def from_pretrained(self, name, **kw):
+        print("Unsloth banner")  # the real one prints on stdout
         self.loads.append((name, kw))
         return f"model:{name}", f"tokenizer:{name}"
 
@@ -91,13 +92,15 @@ def test_the_questions_reach_unsloth_in_the_system_one_body(fake_unsloth):
     assert sent["anger"] == {"type": "score", "instructions": "How angry?", "criteria": ["calm", "annoyed", "furious"]}
 
 
-def test_checkpoints_and_lazy_loading(fake_unsloth):
+def test_checkpoints_and_lazy_loading(fake_unsloth, capsys):
     client = TypeSafeClient(model="unsloth:someone/qwen-decisions")
     assert fake_unsloth.loads == []  # constructing loads nothing
     client.system_one(state="s", questions={"topic": Q["topic"]})
     client.system_one(state="s", questions={"topic": Q["topic"]})
     assert fake_unsloth.loads == [("someone/qwen-decisions", {})]
     assert fake_unsloth.inference == ["model:someone/qwen-decisions"]
+    out = capsys.readouterr()
+    assert "Unsloth banner" not in out.out and "Unsloth banner" in out.err  # stdout stays for jul's JSON
     for bad in ("unsloth:", "unsloth:qwen-decisions"):
         with pytest.raises(ValueError, match="Unknown Unsloth checkpoint"):
             TypeSafeClient(model=bad)
