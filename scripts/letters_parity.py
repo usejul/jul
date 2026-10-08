@@ -9,6 +9,14 @@ and the model's runtime reads them too; the script prints both probability sets 
 and fails above --tolerance. Both run in float32 on the same device, so the gap is numerical noise
 (a different but equivalent forward: jul runs a prompt's shared beginning once as a cached prefix).
 A JevK5 request with 20 options checks the knockout (groups of up to 16, then a final).
+
+On a machine where a 4B model does not fit in float32 (a 16 GB Mac), run the runtimes elsewhere and compare:
+
+    python scripts/letters_parity.py --device cuda --save-reference ref.json          # GPU, runtimes only
+    python scripts/letters_parity.py --backend mlx --reference ref.json               # the Mac, jul on MLX
+    python scripts/letters_parity.py --dtype bfloat16 --reference ref.json            # same, torch CPU bf16
+
+The weights' commit is stored with the reference and must match the local cache.
 """
 
 from __future__ import annotations
@@ -129,12 +137,26 @@ def jul_question(q: dict):
     return Score(q["instructions"], q["criteria"])
 
 
-def run_jul(name, repo, cases):
+def commit(repo: str) -> str:
+    """The commit of the weights read: the cached snapshot (downloaded once if missing)."""
+    from pathlib import Path
+    from huggingface_hub import snapshot_download
+    try:
+        return Path(snapshot_download(repo, local_files_only=True)).name
+    except Exception:  # noqa: BLE001 - not cached yet
+        return Path(snapshot_download(repo)).name
+
+
+def run_jul(name, repo, cases, backend="torch"):
     from jul import TypeSafeClient
+    from jul import letter_models
     from jul.letter_models import spec_from_repo
     from jul.presets import letters_preset, save_preset
-    save_preset(letters_preset(f"parity-{name}", repo, "torch", spec_from_repo(repo)))
-    client = TypeSafeClient(model=f"parity-{name}", backend="torch")
+    spec = spec_from_repo(repo)
+    if backend == "mlx":  # what this script measures: let the reading run before its format is listed
+        letter_models.MLX_MEASURED.add(spec.format)
+    save_preset(letters_preset(f"parity-{name}", repo, backend, spec))
+    client = TypeSafeClient(model=f"parity-{name}", backend=backend)
     out = []
     for state, qs in cases:
         r = client.system_one(state, {n: jul_question(q) for n, q in qs.items()})
@@ -152,16 +174,39 @@ def main() -> int:
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--tolerance", type=float, default=0.01, help="largest allowed probability gap")
     ap.add_argument("--out")
+    ap.add_argument("--backend", default="torch", choices=("torch", "mlx"), help="jul's backend (default: torch)")
+    ap.add_argument("--dtype", default="float32",
+                    help="jul's torch dtype (default float32); the runtimes always run in float32, and mlx reads "
+                         "the weights as stored")
+    ap.add_argument("--save-reference", metavar="JSON",
+                    help="run the runtimes only and save their probabilities (and the weights' commit) there")
+    ap.add_argument("--reference", metavar="JSON",
+                    help="compare jul with the runtimes' probabilities saved by --save-reference, without running them")
     a = ap.parse_args()
     os.environ.setdefault("JUL_HOME", tempfile.mkdtemp(prefix="jul-parity-"))
     os.environ.setdefault("JUL_DEVICE", a.device)
-    os.environ.setdefault("JUL_DTYPE", "float32")
-    report, worst = {}, 0.0
+    os.environ.setdefault("JUL_DTYPE", a.dtype)
+    saved = json.load(open(a.reference)) if a.reference else {}
+    references, report, worst = {}, {}, 0.0
     for name in a.models.split(","):
         repo, cases = CASES[name]
-        ref = REFS[name](repo, cases, a.device)
-        gc.collect()
-        mine = run_jul(name, repo, cases)
+        if a.reference:
+            if commit(repo) != saved[name]["commit"]:
+                raise SystemExit(f"{name}: the reference was run on {repo}@{saved[name]['commit']}, "
+                                 f"the cache holds {commit(repo)}")
+            ref = saved[name]["probabilities"]
+        else:
+            ref = REFS[name](repo, cases, a.device)
+            gc.collect()
+        if a.save_reference:
+            references[name] = {"repo": repo, "commit": commit(repo), "device": a.device, "dtype": a.dtype,
+                                "probabilities": [{n: {k: float(v) for k, v in p.items()} for n, p in r.items()}
+                                                  for r in ref]}
+            with open(a.save_reference, "w") as f:
+                json.dump(references, f, indent=1)
+            print(f"{name}: reference saved", flush=True)
+            continue
+        mine = run_jul(name, repo, cases, a.backend)
         gc.collect()
         rows = []
         for (state, qs), r, m in zip(cases, ref, mine):

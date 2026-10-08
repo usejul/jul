@@ -27,6 +27,11 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   (`jevk5_config.json`, `quyet_config.json`, `calibration.json`) or a `decision.json` with
   `"method": "letters"`; nothing is fitted. JevK5's knockout reads more than 16 options.
   `scripts/letters_parity.py` compares the probabilities with each runtime on its README examples.
+- **Letter-readout models on MLX** (#54): `--backend mlx` reads the four of them, measured against their runtimes
+  in float32 (largest gap 4.2e-3 in bf16, no larger than torch's at the same dtype). mlx-lm now loads the
+  text-only Qwen3.5 checkpoints they ship (`model_type: qwen3_5_text`, read as `qwen3_5`).
+  `scripts/letters_parity.py` takes `--backend`, `--dtype`, and `--save-reference` / `--reference` to compare
+  with runtimes run elsewhere (e.g. float32 on a GPU).
 
 ### Changed
 

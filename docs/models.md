@@ -328,10 +328,10 @@ reading uses jul's prompt, which they were not trained on, so `jul models add` r
 the way their own runtime does (`lib/jul/letter_models.py`). Nothing is fitted:
 
 ```bash
-jul models add jevk5 --repo alibiserikbay/JevK5 --backend torch
-jul models add plumb-4b --repo crh225/plumb-4b --backend torch
-jul models add quyet-medium --repo chinhnc/Quyet-1.0-Medium --backend torch
-jul models add spark-s1-4b --repo abhishek085/spark-s1-4b-v6 --backend torch
+jul models add jevk5 --repo alibiserikbay/JevK5                 # --backend torch or mlx
+jul models add plumb-4b --repo crh225/plumb-4b
+jul models add quyet-medium --repo chinhnc/Quyet-1.0-Medium
+jul models add spark-s1-4b --repo abhishek085/spark-s1-4b-v6
 jul ask noul "Does the customer ask for money back?" --state "I was billed twice, please refund" --model jevk5
 ```
 
@@ -354,11 +354,24 @@ CPU, same weights): the probabilities agree to within 5e-5 on all four models (1
 Score, and a 20-option Choice through the knockout). The prompts are the runtimes' token for token;
 the questions of one call share the state, which runs once as a cached prefix.
 
+**Backends.** PyTorch and MLX (`--backend mlx`, the weights read in bf16 as published). On MLX, against the
+runtimes in float32 (same examples, `scripts/letters_parity.py --backend mlx --reference`):
+
+| Model | MLX bf16 | torch bf16 (CPU) |
+| --- | ---: | ---: |
+| JevK5 v0.3 | 2.0e-3 | 5.9e-3 |
+| plumb-4b | 4.2e-3 | 4.2e-3 |
+| Quyet-1.0-Medium | 1.9e-3 | 1.9e-3 |
+| spark-s1-4b-v6 | 2.4e-4 | 2.4e-4 |
+
+Largest probability gap per model, same answer everywhere. MLX is never further from the runtime than torch at
+the same dtype: the gap is bf16's, not the MLX path's. Quyet's prompts (state cut included) are token-identical
+with mlx-lm's tokenizer and with transformers'. MLX in float32 was not measured (4B in float32 is about 18 GB).
+
 What they do not do: no vector reading is fitted on their weights, so `method=` cannot pick another reading,
 `autotune` has nothing to train a head on, `jul pack` refuses them; plumb's JevBench v1.5 settings (yes/no
 answers moved out of the 0.2–0.8 band, a score temperature of 1.2) are output transforms of its own server for
-that benchmark, not part of the model, and are not applied. They are read with `--backend torch` only:
-parity is measured there, `mlx`, `onnx` and `api` are refused.
+that benchmark, not part of the model, and are not applied. `onnx` and `api` are refused.
 
 A state too long for the model's own prompt rule is cut as its runtime cuts it: Quyet keeps the head of the
 state (the tail of a list) within `max_state_tokens`, cut once for the whole request so that every question
