@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import math
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
 
-from . import truncation, tuning
+from . import telemetry, truncation, tuning
 from .calibration import fit_temperature_bias
 from .backbone import model_key, resolve_backend
 from .context import Context, question_digest, resolve_context
@@ -71,6 +72,7 @@ class TypeSafeClient:
         self._context_home = context_home
         self.context = resolve_context(context, context_home)
         self.method = method
+        self._telemetry = telemetry.Session()
 
     # --- model handling -----------------------------------------------------------------------
 
@@ -80,6 +82,11 @@ class TypeSafeClient:
         if self._backend is None:
             self._backend = resolve_backend(self._requested_backend)
         return self._backend
+
+    @property
+    def _telemetry_backend(self) -> str | None:
+        """The backend label of telemetry: Laya runs on its own PyTorch runtime, whatever was resolved."""
+        return "torch" if self._laya is not None else self._backend
 
     def _resolve_preset(self, model: str | None) -> Preset:
         """Before the first call there may be no backend at all: fall back to the built-in preset."""
@@ -144,8 +151,34 @@ class TypeSafeClient:
         if not questions:
             raise ValueError("system_one needs at least one question")
         on_long = _on_long(on_long or getattr(self, "on_long", "cut"))
+        if not telemetry.active():
+            return self._decide(state, questions, context, model, method, route_above, on_long, {})
+        started, methods = time.perf_counter(), {}
+        try:
+            response = self._decide(state, questions, context, model, method, route_above, on_long, methods)
+        except Exception as error:
+            telemetry.record_error(self._telemetry, model=self.model, backend=self._telemetry_backend, error=error,
+                                   duration_ms=(time.perf_counter() - started) * 1000,
+                                   question_count=len(questions))
+            raise
+        duration_ms = (time.perf_counter() - started) * 1000
+        # A reading that does not say how it read (a model family added later, e.g. letter-readout) is
+        # reported under its preset's method rather than "unknown".
+        for name in questions:
+            methods.setdefault(name, getattr(self._preset, "method", None) or "unknown")
+        ctx = resolve_context(context, self._context_home) if context is not None else self.context
+        telemetry.record_request(
+            self._telemetry, model=response.model, backend=self._telemetry_backend, state_text=serialize_state(state),
+            questions=questions, kinds={n: _kind_of(q) for n, q in questions.items()},
+            methods=methods, response=response, duration_ms=duration_ms,
+            context_name=getattr(ctx, "name", None))
+        return response
+
+    def _decide(self, state: Any, questions: Mapping[str, Question], context, model, method, route_above,
+                on_long: str, methods: dict[str, str]) -> SystemOneResponse:
+        """The call, with `on_long` applied to what the readings cut (jul/truncation.py)."""
         with truncation.tracking() as cuts:
-            response = self._system_one(state, questions, context, model, method, route_above)
+            response = self._system_one(state, questions, context, model, method, route_above, methods)
             worst = cuts.state_worst() if on_long == "error" else None
             if worst:
                 cuts.silent = True           # refused: the refusal below says it, not an "input cut" line
@@ -159,11 +192,15 @@ class TypeSafeClient:
         return response
 
     def _system_one(self, state: Any, questions: Mapping[str, Question], context, model, method,
-                    route_above) -> SystemOneResponse:
+                    route_above, methods: dict[str, str]) -> SystemOneResponse:
+        """`methods` is filled with how each question was read (pointer, vector, letters, cross,
+        contrastive, head), for telemetry; a question left out is reported under the preset's method."""
         if self._laya is not None:
             if model and model != self._laya.name:
                 raise ValueError(f"this client runs {self._laya.name!r}; create another one for {model!r}")
-            return self._laya.system_one(state, questions)
+            response = self._laya.system_one(state, questions)
+            methods.update(dict.fromkeys(questions, "laya"))
+            return response
         ctx = resolve_context(context, self._context_home) if context is not None else self.context
         engine = self._engine_for(model)
         text = serialize_state(state)
@@ -181,6 +218,7 @@ class TypeSafeClient:
             logits, tokens = engine.reader.logits(state, items)
             for (name, question), (kind, _, options), z in zip(questions.items(), items, logits):
                 answers[name] = _format(kind, question, options, self._calibrated(ctx, kind, question, options, z))
+                methods[name] = "letter-readout"
             return SystemOneResponse(answers=answers, model=self._preset.name, usage=Usage(input_tokens=tokens),
                                      request_id=str(uuid.uuid4()))
 
@@ -203,12 +241,14 @@ class TypeSafeClient:
                 for (name, question), (kind, _, options), z in zip(direct.items(), items, logits):
                     answers[name] = _format(kind, question, options,
                                             self._calibrated(ctx, kind, question, options, z))
+                    methods[name] = "pointer"
             for name, question in routed.items():
                 kind, options = _kind_of(question), options_of(question)
                 probabilities, spent = self._answer_probabilities(engine, kind, "vector", question, options,
                                                                  text, ctx, shared, preset=fallback)
                 tokens += spent
                 answers[name] = _format(kind, question, options, probabilities)
+                methods[name] = self._read_as(ctx, kind, "vector", question, options)
             return SystemOneResponse(answers={n: answers[n] for n in questions}, model=self._preset.name,
                                      usage=Usage(input_tokens=tokens), request_id=str(uuid.uuid4()))
 
@@ -223,6 +263,7 @@ class TypeSafeClient:
                 probabilities = (tuning.apply(head, embedding) if head is not None
                                  else self._calibrated(ctx, kind, question, options, logits))
                 answers[name] = _format(kind, question, options, probabilities)
+                methods[name] = "head" if head is not None else "contrastive"
             return SystemOneResponse(answers=answers, model=self._preset.name, usage=Usage(input_tokens=tokens),
                                      request_id=str(uuid.uuid4()))
 
@@ -242,11 +283,13 @@ class TypeSafeClient:
                     tokens += spent
                     logits = np.log(np.clip(vector, 1e-12, 1.0)) + mix * (logits - _logsumexp(logits))
                 answers[name] = _format(kind, question, options, softmax(logits))
+                methods[name] = "cross"
                 continue
             probabilities, spent = self._answer_probabilities(engine, kind, how, question, options, text,
                                                               ctx, shared)
             tokens += spent
             answers[name] = _format(kind, question, options, probabilities)
+            methods[name] = self._read_as(ctx, kind, how, question, options)
 
         return SystemOneResponse(answers=answers, model=self._preset.name, usage=Usage(input_tokens=tokens),
                                  request_id=str(uuid.uuid4()))
@@ -300,6 +343,11 @@ class TypeSafeClient:
         # The preset read, not self._preset: a decision model routes questions to its vector fallback, and its
         # own preset's tau (1.0) would flatten every routed answer to near uniform.
         return self._calibrated(ctx, kind, question, options, scores / preset.tau), tokens
+
+    def _read_as(self, ctx: Context | None, kind: str, how: str, question: Question,
+                 options: list[Option]) -> str:
+        """The reading `_answer_probabilities` actually used: a tuned head overrides `how`."""
+        return "head" if self._head(ctx, kind, question, options) is not None else how
 
     def _digest(self, kind: str, question: Question, options: list[Option]) -> str:
         return question_digest(model_key(self._preset.name, self.backend), kind, question.instructions, options)

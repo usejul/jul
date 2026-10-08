@@ -659,6 +659,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> None:
+    from jul import telemetry
+    telemetry.ENTRYPOINT = "cli"
     a = build_parser().parse_args(argv)
     if a.command == "context" and a.action != "list" and not a.name:
         raise SystemExit(f"context {a.action} needs a name")

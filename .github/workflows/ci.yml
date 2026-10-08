@@ -53,6 +53,24 @@ jobs:
       - name: Tests
         run: pytest tests -q -rs
 
+  # 1b. jul[otel] at the floor of its range: the events need Logger.emit(event_name=), 1.38 or later.
+  otel-floor:
+    name: telemetry at the oldest OpenTelemetry jul[otel] allows
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install jul[otel] with every OpenTelemetry package at its lowest allowed version
+        run: |
+          pip install uv
+          uv pip install --system --resolution lowest-direct -e ".[dev,otel]"
+          pip list 2>/dev/null | grep -i "^opentelemetry"
+      - name: Telemetry tests
+        run: pytest tests/test_telemetry.py -q -rs
+
   lint:
     name: ruff (bug-catching rules)
     runs-on: ubuntu-24.04

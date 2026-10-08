@@ -34,11 +34,13 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 import urllib.error
 import urllib.request
 import uuid
 from typing import Any, Mapping, Sequence
 
+from . import telemetry
 from .types import (Choice, ChoiceAnswer, Noul, NoulAnswer, NoulCriteria, Question, Score, ScoreAnswer,
                     SystemOneResponse, Usage, options_of, serialize_state)
 
@@ -273,8 +275,32 @@ class SystemOneHTTP:
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self._telemetry = telemetry.Session()
 
     def system_one(self, state: Any, questions: Mapping[str, Question], **_ignored: Any) -> SystemOneResponse:
+        """Reported like a local call when telemetry is on (jul/telemetry.py): `model` is the one the server
+        answered with, `backend` and `method` are "remote", `input_tokens` the server's `usage`."""
+        if not telemetry.active():
+            return self._system_one(state, questions)
+        from .client import _kind_of
+        session = getattr(self, "_telemetry", None) or telemetry.Session()
+        self._telemetry = session
+        started = time.perf_counter()
+        try:
+            response = self._system_one(state, questions)
+        except Exception as error:
+            telemetry.record_error(session, model=self.model, backend="remote", error=error,
+                                   duration_ms=(time.perf_counter() - started) * 1000,
+                                   question_count=len(questions))
+            raise
+        telemetry.record_request(
+            session, model=response.model, backend="remote", state_text=serialize_state(state),
+            questions=questions, kinds={n: _kind_of(q) for n, q in questions.items()},
+            methods=dict.fromkeys(questions, "remote"), response=response,
+            duration_ms=(time.perf_counter() - started) * 1000, context_name=None)
+        return response
+
+    def _system_one(self, state: Any, questions: Mapping[str, Question]) -> SystemOneResponse:
         if not isinstance(state, (str, dict, list)):
             state = serialize_state(state)  # the text the local tier read, not a repr
         body = {"model": self.model, "state": state,

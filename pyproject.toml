@@ -39,6 +39,9 @@ yaml = ["pyyaml>=6"]
 laya = ["laya>=0.3.27"]
 # Lexical and hybrid autotune heads train with scikit-learn (and run with numpy alone).
 tune = ["scikit-learn>=1.3", "scipy>=1.10"]
+# OpenTelemetry export (JUL_ENABLE_TELEMETRY=1). OTLP over HTTP; add opentelemetry-exporter-otlp-proto-grpc for grpc.
+# 1.38: the first release whose Logger.emit takes event_name= (jul.request / jul.decision events); CI tests it
+otel = ["opentelemetry-sdk>=1.38", "opentelemetry-exporter-otlp-proto-http>=1.38"]
 # `jul models add` downloads its calibration data with `datasets`.
 calibrate = ["datasets", "pyarrow"]
 # The lab trains its heads with MLX.

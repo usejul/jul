@@ -248,6 +248,7 @@ ships only the model(s) the questions need. Step by step, with the AWS CLI or CD
 - [Adapting to your data](https://github.com/usejul/jul/blob/main/docs/tuning.md): `Context`, `autotune(...)`, hybrid heads, `jul synth`
 - [Deployment](https://github.com/usejul/jul/blob/main/docs/deployment.md): `jul pack`, ONNX bundles, AWS Lambda
 - [Serving over HTTP](https://github.com/usejul/jul/blob/main/docs/serve.md): `jul serve`
+- [Telemetry](https://github.com/usejul/jul/blob/main/docs/telemetry.md): opt-in OpenTelemetry metrics and events, named after Claude Code's
 - [Command line](https://github.com/usejul/jul/blob/main/docs/cli.md): every command and file format
 - [Benchmarks](https://github.com/usejul/jul/blob/main/docs/benchmarks.md): full results and how to reproduce them
 - [Development](https://github.com/usejul/jul/blob/main/docs/development.md) and [Publishing](https://github.com/usejul/jul/blob/main/docs/publishing.md)

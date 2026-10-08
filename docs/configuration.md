@@ -51,6 +51,17 @@ Escalation and bench keys are read from the environment only (`--escalate-key-en
 for `jul bench`, names the variable), and no key is ever logged. The server key can also be given with `--api-key`, but the environment keeps it out of `ps`
 and shell history.
 
+### Telemetry ([OpenTelemetry](telemetry.md), off by default)
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `JUL_ENABLE_TELEMETRY` | off | `1` sends metrics and events to the collector named by the standard `OTEL_*` variables (`pip install "jul[otel]"`) |
+| `JUL_OTEL_LOG_STATE` | off | sends the state itself instead of `<REDACTED>` |
+| `JUL_OTEL_LOG_QUESTION_DETAILS` | off | sends question names, instructions, option keys, context name, error messages |
+| `JUL_OTEL_LOG_PROBABILITIES` | off | sends the full distribution over options |
+| `JUL_OTEL_LOG_ANSWERS` | on | `0` sends `<REDACTED>` instead of the chosen answer |
+| `JUL_OTEL_CONTENT_MAX_LENGTH` | `61440` | content attributes are cut to this many characters |
+
 ### Tests only
 
 | Variable | What it does |

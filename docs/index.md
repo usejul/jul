@@ -54,6 +54,7 @@ choose. [Models](models.md) has the details, [Benchmarks](benchmarks.md) the num
 | look up a class, argument or field | [Python API](python-api.md) |
 | look up a command or flag | [CLI reference](cli-reference.md) |
 | look up an environment variable or a file on disk | [Configuration](configuration.md) |
+| send metrics and events to my OpenTelemetry collector | [Telemetry](telemetry.md) |
 | fix an error | [FAQ and troubleshooting](troubleshooting.md) |
 | look up a word | [Glossary](glossary.md) |
 

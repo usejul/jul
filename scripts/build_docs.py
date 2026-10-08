@@ -43,6 +43,7 @@ NAV = [
         ("serve", "Serving over HTTP"),
         ("deployment", "Deploying a fixed need"),
         ("aws-lambda", "AWS Lambda, step by step"),
+        ("telemetry", "Telemetry (OpenTelemetry)"),
     ]),
     ("MODELS", [
         ("models", "Models and readings"),
