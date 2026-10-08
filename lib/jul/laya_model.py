@@ -59,6 +59,9 @@ def _checkpoint(model: str) -> tuple[str, str | None]:
 class LayaModel:
     """One Laya checkpoint, loaded on the first call (constructing it needs neither `laya` nor torch)."""
 
+    runtime = "Laya"
+    package = "laya"
+
     def __init__(self, model: str = "laya", backend: str | None = None):
         if backend not in (None, "torch"):
             raise ValueError(f"{model!r} runs on Laya's own PyTorch runtime, not on backend {backend!r}")

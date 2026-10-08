@@ -174,10 +174,10 @@ def setup_command(model: str | None, backend: str | None) -> str:
 def require_setup(model: str | None, backend: str | None) -> None:
     """Stops a command that loads a model when `jul setup` has not been run for it. Offline, no load."""
     from jul.backbone import resolve_backend
-    from jul.laya_model import is_laya
-    if is_laya(model):  # Laya's own package runs it, and downloads its checkpoint on first use
-        if importlib.util.find_spec("laya") is None:
-            raise SystemExit(f"{model} needs the laya package. Run: {setup_command(model, None)}")
+    runtime = _delegated(model)
+    if runtime is not None:  # its own package runs it, and downloads its checkpoint on first use
+        if importlib.util.find_spec(runtime.package) is None:
+            raise SystemExit(f"{model} needs the {runtime.package} package. Run: {setup_command(model, None)}")
         return
     from jul.presets import resolve
     fix = setup_command(model, backend)
@@ -218,9 +218,9 @@ def check(model: str, backend: str) -> None:
 
 def run(model: str | None, backend: str | None, install: bool = True, skip_check: bool = False) -> None:
     model = model or DEFAULT_MODEL
-    from jul.laya_model import is_laya
-    if is_laya(model):
-        return setup_laya(model, install, skip_check)
+    runtime = _delegated(model)
+    if runtime is not None:
+        return setup_delegated(model, runtime, install, skip_check)
     default = default_backend()
     backend = backend or default
     print(f"jul setup: {model} on {backend}")
@@ -235,24 +235,34 @@ def run(model: str | None, backend: str | None, install: bool = True, skip_check
           + ("" if backend == default else f" --backend {backend}"))
 
 
-def setup_laya(model: str, install: bool, skip_check: bool) -> None:
-    """Laya runs on its own package (jul/laya_model.py): install it, then check one decision."""
-    print(f"jul setup: {model} (Laya's own runtime)")
-    hint = "pip install 'jul[laya]'"
-    if importlib.util.find_spec("laya") is None:
+def _delegated(model: str | None):
+    """The model's own runtime (Laya, Unsloth) when JuL does not read it, else None. Loads nothing."""
+    from jul.client import delegated_model
+    try:
+        return delegated_model(model)
+    except ValueError as exc:  # a malformed `laya:` / `unsloth:` name
+        raise SystemExit(str(exc)) from None
+
+
+def setup_delegated(model: str, runtime, install: bool, skip_check: bool) -> None:
+    """A model on its own package (jul/laya_model.py, jul/unsloth_model.py): install it, then check one decision."""
+    package = runtime.package
+    print(f"jul setup: {model} ({runtime.runtime}'s own runtime)")
+    hint = f"pip install 'jul[{package}]'"
+    if importlib.util.find_spec(package) is None:
         if not install:
-            raise SystemExit(f"laya is not installed: {hint}")
+            raise SystemExit(f"{package} is not installed: {hint}")
         try:
-            reqs = extra_requirements("laya")
+            reqs = extra_requirements(package)
         except importlib.metadata.PackageNotFoundError:
             reqs = []
         if not reqs:
-            raise SystemExit(f"jul is not installed as a package, cannot read its [laya] extra: {hint}")
-        _step("runtime", "laya: installing ...")
+            raise SystemExit(f"jul is not installed as a package, cannot read its [{package}] extra: {hint}")
+        _step("runtime", f"{package}: installing ...")
         if subprocess.run([sys.executable, "-m", "pip", "install", *reqs]).returncode != 0:
             raise SystemExit(f"pip failed; install it yourself: {hint}")
         importlib.invalidate_caches()
-    _step("runtime", "laya (installed)")
+    _step("runtime", f"{package} (installed)")
     if not skip_check:
         check(model, None)
     print(f"\nReady. Try:\n  jul ask choice \"Which team should handle this ticket?\" "
