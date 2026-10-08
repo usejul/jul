@@ -22,10 +22,19 @@ class _StopForward(Exception):
     pass
 
 
+#: Text-only model types written by transformers for which mlx-lm only knows the family's type. Its model for
+#: the family reads a flat (text-only) config and its weight names as well (e.g. a merged `Qwen3_5ForCausalLM`
+#: fine-tune: JevK5, Plumb, Quyet, spark-s1).
+_MLX_MODEL_TYPE = {"qwen3_5_text": "qwen3_5"}
+
+
 def _rope_fix(repo: str) -> dict | None:
-    """transformers 5 writes the RoPE base under `rope_parameters`; mlx-lm reads `rope_theta` and
-    silently falls back to 10000 when it is missing, which gives wrong answers without any error.
-    Pass the right value when a converted config has only the new key."""
+    """Overrides for mlx-lm's reading of a transformers config.
+
+    transformers 5 writes the RoPE base under `rope_parameters`; mlx-lm reads `rope_theta` and silently falls
+    back to 10000 when it is missing, which gives wrong answers without any error: pass the right value when a
+    converted config has only the new key. And a text-only model type mlx-lm does not list is mapped to its
+    family's (`_MLX_MODEL_TYPE`)."""
     path = Path(repo) / "config.json"
     if not path.exists():
         # a Hub repo: the cached config, else fetch that one file (1 KB, before the weights)
@@ -36,8 +45,13 @@ def _rope_fix(repo: str) -> dict | None:
         except Exception:
             return None
     config = json.loads(path.read_text())
+    fix = {}
     theta = (config.get("rope_parameters") or {}).get("rope_theta")
-    return {"rope_theta": theta} if theta and "rope_theta" not in config else None
+    if theta and "rope_theta" not in config:
+        fix["rope_theta"] = theta
+    if config.get("model_type") in _MLX_MODEL_TYPE:
+        fix["model_type"] = _MLX_MODEL_TYPE[config["model_type"]]
+    return fix or None
 
 
 class _Tap:
