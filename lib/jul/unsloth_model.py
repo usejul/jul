@@ -48,7 +48,7 @@ def is_unsloth(model: str | None) -> bool:
 def _checkpoint(model: str) -> str:
     """`unsloth:<directory or owner/repo>` -> the directory or the repo."""
     suffix = model[len(PREFIX):].strip()
-    if not suffix or "/" not in suffix:
+    if not suffix or ("/" not in suffix and not Path(suffix).expanduser().is_dir()):
         raise ValueError(f"Unknown Unsloth checkpoint {model!r}: use unsloth:<directory> or unsloth:<owner/repo> "
                          "(a decision model saved by Unsloth)")
     return suffix
@@ -86,7 +86,8 @@ class UnslothModel:
         with self._lock:
             if self._loaded is None:
                 # Unsloth prints its banner and patch notes on stdout: keep them on stderr, so that `jul ask`
-                # prints only its JSON there.
+                # prints only its JSON there. redirect_stdout swaps sys.stdout for the whole process: under
+                # `jul serve`, another thread printing during this first load writes to stderr, which is harmless.
                 with contextlib.redirect_stdout(sys.stderr):
                     try:
                         from unsloth import FastDecisionModel  # noqa: PLC0415 - optional dependency

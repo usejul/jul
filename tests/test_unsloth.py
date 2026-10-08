@@ -106,6 +106,13 @@ def test_checkpoints_and_lazy_loading(fake_unsloth, capsys):
             TypeSafeClient(model=bad)
 
 
+def test_a_local_directory_needs_no_slash(fake_unsloth, tmp_path, monkeypatch):
+    (tmp_path / "mymodel").mkdir()
+    monkeypatch.chdir(tmp_path)
+    TypeSafeClient(model="unsloth:mymodel").system_one(state="s", questions={"topic": Q["topic"]})
+    assert fake_unsloth.loads[-1] == ("mymodel", {})
+
+
 def test_a_model_without_a_decision_head_is_refused(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "unsloth", types.SimpleNamespace(FastDecisionModel=FakeFast(ANSWERS)))
     plain = tmp_path / "plain"

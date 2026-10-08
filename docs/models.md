@@ -421,8 +421,10 @@ a plain language model is refused, since Unsloth would put an untrained head on 
 models on an NVIDIA (or AMD, Intel) GPU, not on a Mac, and `--backend` other than `torch` is refused. The
 first call loads the model. As for Laya, no `method`, no heads or calibration from a context, no `autotune`,
 no `pack`; the answers are Unsloth's own (`confidence` calibrated by `FastDecisionModel.calibrate`), and
-`usage` stays at 0 (`predict` does not report tokens). Unsloth's decision code is published under
-AGPL-3.0: JuL only calls it, through the optional `unsloth` extra.
+`usage` stays at 0 (`predict` does not report tokens). Unsloth reads up to 16,384 tokens and cuts the rest
+without telling the caller, so `usage.truncated_tokens` stays at 0 and `on_long="error"` does
+not refuse a long state. Unsloth's decision code is published under AGPL-3.0: JuL only calls it, through
+the optional `unsloth` extra.
 
 **Unsloth Studio.** Studio serves a decision model on its own Decision API, at `/v1/systemone` (the System
 One body). That needs no code in JuL: it is a URL tier, with the key Studio gives you (Settings → API).
