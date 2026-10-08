@@ -28,6 +28,13 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   `"method": "letters"`; nothing is fitted. JevK5's knockout reads more than 16 options.
   `scripts/letters_parity.py` compares the probabilities with each runtime on its README examples.
 
+- **Unsloth decision models** as a model: `TypeSafeClient(model="unsloth:<directory or owner/repo>")`,
+  `--model unsloth:...`, with `pip install "jul[unsloth]"` or `jul setup --model unsloth:...`. A model trained
+  with Unsloth (an LLM + LoRA + a Clef-style head, or a fine-tuned Laya / Clef) runs on Unsloth's own
+  `FastDecisionModel.predict`; JuL hands it the questions and returns its answers, as for Laya. CUDA (or ROCm,
+  XPU) only; a checkpoint without a decision head is refused. Unsloth Studio's Decision API is a URL tier of
+  `--escalate-to`, no code needed. See [Models > Unsloth](docs/models.md#unsloth-decision-models) (#52).
+
 ### Changed
 
 - The encoder and onnx cuts were a `warnings.warn` shown once per call site; they are now logged on every

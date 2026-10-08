@@ -371,12 +371,13 @@ def readings(client, methods: list, features: list) -> tuple[list, list, dict]:
         for f in features:
             skipped[f"autotune:{f}"] = "remote server: no autotune"
         return [None], [], skipped
-    if getattr(client, "_laya", None) is not None:
+    delegated = getattr(client, "_delegated", None)
+    if delegated is not None:
         for m in methods:
             if m:
-                skipped[f"zero-shot:{m}"] = "Laya: reads with its own runtime only"
+                skipped[f"zero-shot:{m}"] = f"{delegated.runtime}: reads with its own runtime only"
         for f in features:
-            skipped[f"autotune:{f}"] = "Laya: no autotune"
+            skipped[f"autotune:{f}"] = f"{delegated.runtime}: no autotune"
         return [None], [], skipped
     if hasattr(client, "_engine_for"):
         engine = client._engine_for(None)            # loads the model, needed anyway

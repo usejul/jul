@@ -37,6 +37,9 @@ onnx-export = ["jul[torch]", "onnx>=1.16", "onnxscript"]
 yaml = ["pyyaml>=6"]
 # Laya (convaiinnovations/laya) runs on its own package: `TypeSafeClient(model="laya")`, jul/laya_model.py.
 laya = ["laya>=0.3.27"]
+# Unsloth's decision models run on its own package: `TypeSafeClient(model="unsloth:<checkpoint>")`,
+# jul/unsloth_model.py. A CUDA (or ROCm, XPU) GPU is needed; it does not run them on a Mac.
+unsloth = ["unsloth>=2026.10.2"]
 # Lexical and hybrid autotune heads train with scikit-learn (and run with numpy alone).
 tune = ["scikit-learn>=1.3", "scipy>=1.10"]
 # `jul models add` downloads its calibration data with `datasets`.

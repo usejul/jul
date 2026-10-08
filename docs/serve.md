@@ -75,7 +75,7 @@ and only those. Keys are read from the provider's usual variable, never from the
 | `typesafe` | Jev, `api.typesafe.ai` | `TYPESAFE_API_KEY` |
 | `ollama`, `ollama:clef-flash` | Ollama on localhost (Nimble by default) | none |
 | `cloudflare`, `cloudflare:clef` | Clef on Cloudflare Workers AI (`clef-flash` by default) | `CLOUDFLARE_API_TOKEN` (or `CLOUDFLARE_AUTH_TOKEN`), plus `CLOUDFLARE_ACCOUNT_ID` |
-| a URL | any `/v1/systemone` server: Kev, another `jul serve`... | the variable named by `--escalate-key-env` |
+| a URL | any `/v1/systemone` server: Kev, Unsloth Studio, another `jul serve`... | the variable named by `--escalate-key-env` |
 
 ```bash
 TYPESAFE_API_KEY=... jul serve --escalate-to typesafe --min-confidence 0.8

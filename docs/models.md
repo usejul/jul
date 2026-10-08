@@ -396,6 +396,50 @@ calibration from a context, no `autotune`, no `pack` (each raises a `ValueError`
 is calibrated by Laya, not the top probability JuL's readings report, so a bar set for one model in an
 `Escalation` does not carry over to the other.
 
+## Unsloth decision models
+
+[Unsloth](https://github.com/unslothai/unsloth) trains decision models: an LLM (Qwen3.5, Llama, Gemma...) with a
+LoRA and a small Clef-style head that scores every option of every question in one pass, without generating
+text ([guide](https://unsloth.ai/docs/basics/train-your-own-decision-model-with-unsloth)). It also fine-tunes
+Laya and Clef. As with Laya, JuL does not read these weights: it hands the questions to Unsloth's
+`FastDecisionModel.predict` and returns its answers as JuL's, so a model you trained in Unsloth takes the same
+calls and commands as any other (`jul ask`, `run`, `serve`, `bench`, an `Escalation` tier).
+
+```bash
+pip install "jul[unsloth]"         # or: jul setup --model unsloth:./qwen-decisions
+jul ask choice "Which team should handle this ticket?" -o billing -o technical \
+    --state "I was charged twice" --model unsloth:./qwen-decisions
+```
+
+| `--model` | Checkpoint |
+| --- | --- |
+| `unsloth:<directory>` | a folder written by `save_pretrained` (LoRA + head) or `save_pretrained_merged` |
+| `unsloth:<owner/repo>` | the same, on the Hugging Face Hub |
+
+The checkpoint must carry a trained decision head (`joint_head_config.json`, or Laya's `rl_agent_config.json`):
+a plain language model is refused, since Unsloth would put an untrained head on it. Unsloth runs decision
+models on an NVIDIA (or AMD, Intel) GPU, not on a Mac, and `--backend` other than `torch` is refused. The
+first call loads the model. As for Laya, no `method`, no heads or calibration from a context, no `autotune`,
+no `pack`; the answers are Unsloth's own (`confidence` calibrated by `FastDecisionModel.calibrate`), and
+`usage` stays at 0 (`predict` does not report tokens). A model trained in 4-bit (QLoRA, the guide's default)
+is calibrated on its 4-bit base: loaded in 16-bit, as `from_pretrained` does by default and as JuL loads it, its
+probabilities move a little (in our 60-step smoke run, a Noul went from 0.84 to 0.75, the choices stayed within
+0.01). Unsloth reads up to 16,384 tokens and cuts the rest
+without telling the caller, so `usage.truncated_tokens` stays at 0 and `on_long="error"` does
+not refuse a long state. Unsloth's decision code is published under AGPL-3.0: JuL only calls it, through
+the optional `unsloth` extra.
+
+**Unsloth Studio.** Studio serves a decision model on its own Decision API, at `/v1/systemone` (the System
+One body). That needs no code in JuL: it is a URL tier, with the key Studio gives you (Settings → API).
+
+```bash
+jul serve --escalate-to http://localhost:8888 --escalate-model default --escalate-key-env UNSLOTH_API_KEY \
+    --min-confidence 0.8
+```
+
+`--escalate-model` is the name Studio serves (`default`, `laya` and `jev-latest` all go to the model it is
+started with); in Python, `remote_tier("http://localhost:8888", "default", "UNSLOTH_API_KEY")`.
+
 ## Contrastive heads (any backbone; CLM-8B)
 
 A contrastive preset reads a **frozen** backbone through two small projection heads: the state (with the

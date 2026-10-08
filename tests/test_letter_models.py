@@ -223,7 +223,7 @@ def test_the_client_answers_with_the_reader(monkeypatch):
     engine.reader = reader({"billing": 3.0, "tech": 0.0, "true": 0.0, "false": 0.0, "0": 0.0, "1": 1.0},
                            temperature=1.0)
     c = client_mod.TypeSafeClient.__new__(client_mod.TypeSafeClient)
-    c._laya, c._preset, c.context, c.method = None, preset, None, None
+    c._delegated, c._preset, c.context, c.method = None, preset, None, None
     monkeypatch.setattr(c, "_engine_for", lambda model=None: engine, raising=False)
     r = c.system_one("I was billed twice", {"team": Choice("Which team?", ["billing", "tech"]),
                                             "refund": Noul("Refund?"), "level": Score("How?", ["low", "high"])})

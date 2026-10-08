@@ -432,7 +432,7 @@ ul.mac li::before { content: ""; position: absolute; left: 0; top: .55em; width:
           <p>Run a model, or route to a server. Same <code>Choice</code> / <code>Noul</code> / <code>Score</code>
           calls, same response, whatever answers.</p>
           <div class="chips">
-            <span>Hugging Face</span><span>Kev models</span><span>Laya</span><span>Encoders · ONNX</span>
+            <span>Hugging Face</span><span>Kev models</span><span>Laya</span><span>Unsloth</span><span>Encoders · ONNX</span>
             <span>Ollama</span><span>OpenAI</span><span>Mistral</span><span>Jev</span><span>Clef</span><span>your fine-tune</span>
           </div>
         </div>
@@ -478,6 +478,7 @@ model="fast"       <span class="dim"># 2B · 1.3 GB</span></pre>
           <tr><th>Contrastive heads<small>CLM-8B</small></th><td class="y"></td><td class="y"></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="n"></td></tr>
           <tr><th>Embeddings APIs<small>Ollama, OpenAI, Mistral, Voyage</small></th><td class="n"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="q"></td><td class="q"></td></tr>
           <tr><th>Laya<small>its own runtime</small></th><td class="n"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
+          <tr><th>Unsloth decision models<small>its own runtime, NVIDIA GPU</small></th><td class="n"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
         </tbody>
       </table>
       <p class="compat-note">■ yes · □ partly (built-in: accurate packs, fast does not; ONNX: decoders the exporter supports) · ? not measured yet · — no. ONNX runs a model exported by <code>jul.backends.onnx_export</code>.</p>
@@ -947,7 +948,8 @@ latency per decision, and the answer to the ticket.</pre>
           ["fast", "2B · half the size", "fast — jul-decision-minicpm5-2b: 2B parameters, 1.3 GB on a Mac in 4-bit, half the size of the default."],
           ["any Hugging Face model", "LLM, embedding model, encoder, decision model", "any Hugging Face model — an LLM, an embedding model, a small encoder (e5, BERT, XLM-R) or a decision model: jul models add fits it once. See the table below."],
           ["an embeddings API", "no weights here: Ollama · OpenAI · Mistral · Voyage", "an embeddings API — the model runs elsewhere, JuL reads its embeddings over HTTP (--backend api)."],
-          ["Laya", "its own runtime: no autotune, no pack", "Laya — a decision model with its own runtime: JuL hands it the questions; autotune and jul pack do not apply."]] },
+          ["Laya", "its own runtime: no autotune, no pack", "Laya — a decision model with its own runtime: JuL hands it the questions; autotune and jul pack do not apply."],
+          ["Unsloth", "your fine-tune, its own runtime", "Unsloth — a decision model you trained with Unsloth (unsloth:<checkpoint>): JuL hands it the questions; NVIDIA GPU; autotune and jul pack do not apply."]] },
       { name: "Hardware", q: "Where it runs", icon: "chip",
         def: ["auto", "MLX on a Mac, PyTorch elsewhere", "auto — MLX on a Mac, PyTorch elsewhere. Torch device order: cuda > mps > cpu."],
         alts: [
