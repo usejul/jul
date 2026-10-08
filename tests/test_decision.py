@@ -108,6 +108,16 @@ def test_mlx_gets_the_rope_base_that_transformers_5_moved(tmp_path):
     assert _rope_fix(str(tmp_path)) is None
 
 
+def test_mlx_reads_a_text_only_qwen3_5_checkpoint(tmp_path):
+    """Merged Qwen3_5ForCausalLM fine-tunes (JevK5, Plumb, Quyet, spark-s1) say `qwen3_5_text`, which mlx-lm
+    does not list; its `qwen3_5` model reads their flat config and weight names."""
+    pytest.importorskip("mlx")
+    from jul.backends.mlx import _rope_fix
+    (tmp_path / "config.json").write_text(json.dumps({"model_type": "qwen3_5_text",
+                                                      "rope_parameters": {"rope_theta": 10000000}}))
+    assert _rope_fix(str(tmp_path)) == {"rope_theta": 10000000, "model_type": "qwen3_5"}
+
+
 def test_a_decision_model_is_recognised_by_its_spec_file(tmp_path):
     """Without this, `jul models add` would run the vector calibration on a decision model."""
     from jul.decision import spec_source

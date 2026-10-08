@@ -294,12 +294,62 @@ def test_letter_cuts_are_counted_and_refused_like_the_others():
     assert reading == "fake letters (state, head kept)" and over == 2000 - limit and cuts.tokens == over
 
 
-def test_letter_models_are_read_on_torch_only():
+def test_letter_models_are_read_on_mlx_only_where_measured(monkeypatch):
+    from jul import letter_models
     from jul.engine import Engine
 
     class Mlx:
         name, backend, model_dir = "m", "mlx", "."
 
-    preset = letters_preset("q", "r", "torch", spec_from_config("quyet_config.json", QUYET))
-    with pytest.raises(ValueError, match="backend='torch' for now"):
+        def __init__(self):
+            self.tokenizer = FakeTokenizer()  # mlx-lm's TokenizerWrapper has no __call__ either
+
+    spec = spec_from_config("quyet_config.json", QUYET)
+    preset = letters_preset("q", "r", "mlx", spec)
+    monkeypatch.setattr(letter_models, "MLX_MEASURED", set())
+    with pytest.raises(ValueError, match="quyet format is read with backend 'torch' for now"):
         Engine(preset, backbone=Mlx())
+    assert letter_models.unsupported_backend(spec, "onnx")
+    monkeypatch.setattr(letter_models, "MLX_MEASURED", {"quyet"})
+    assert Engine(preset, backbone=Mlx()).reader is not None
+    assert letter_models.unsupported_backend(spec, "mlx") is None
+
+
+def test_models_add_refuses_an_unmeasured_mlx_format(monkeypatch):
+    import importlib
+    from types import SimpleNamespace
+    from jul import letter_models
+    cli = importlib.import_module("jul_cli.main")
+    monkeypatch.setattr(letter_models, "spec_from_repo", lambda repo: spec_from_config("quyet_config.json", QUYET))
+    monkeypatch.setattr(letter_models, "MLX_MEASURED", set())
+    monkeypatch.setattr("jul.backbone.resolve_backend", lambda b: b)
+    monkeypatch.setattr("jul.contrastive.is_heads_source", lambda repo: False)
+    with pytest.raises(SystemExit, match="not measured on mlx"):
+        cli.cmd_models_add(SimpleNamespace(name="q", repo="r", backend="mlx", cross=None, train_heads=None))
+
+
+def test_every_format_is_measured_on_mlx():
+    """#54: parity of each format with its runtime measured on MLX (bf16) before it was listed."""
+    from jul import letter_models
+    assert letter_models.MLX_MEASURED == set(letter_models.FORMATS)
+
+
+@pytest.mark.slow
+def test_real_letter_model_on_mlx(tmp_path, monkeypatch):
+    """JevK5 on MLX against the README answer (billing, 0.996) and the float32 runtime (0.9963)."""
+    import sys
+    if sys.platform != "darwin":
+        pytest.skip("MLX runs on Apple Silicon only")
+    pytest.importorskip("mlx_lm")
+    monkeypatch.setenv("JUL_HOME", str(tmp_path))
+    from jul import TypeSafeClient
+    from jul.letter_models import spec_from_repo
+    from jul.presets import letters_preset, save_preset
+    repo = "alibiserikbay/JevK5"
+    save_preset(letters_preset("jevk5-test", repo, "mlx", spec_from_repo(repo)))
+    r = TypeSafeClient(model="jevk5-test", backend="mlx").system_one(
+        "I was billed twice for order #4411. Please refund the duplicate charge today.",
+        {"team": Choice("Which team should handle this?",
+                        {"billing": "Payments and refunds", "tech": "Bugs", "sales": "New purchases"})})
+    assert r.choices["team"].choice == "billing"
+    assert abs(r.choices["team"].probabilities["billing"] - 0.9963) < 0.01

@@ -45,8 +45,23 @@ from .types import NOUL_DEFAULTS, Option
 
 SPEC_FILE = "decision.json"
 FORMATS = ("semif", "quyet", "open-spark-jev")
+#: The formats whose MLX reading was measured against the model's runtime (scripts/letters_parity.py
+#: --backend mlx, against the runtimes in float32): largest probability gap on their README examples, bf16 MLX
+#: weights, 2026-10-08 (#54): semif 4.2e-3 (JevK5 2.0e-3, plumb 4.2e-3), quyet 1.9e-3, open-spark-jev 2.4e-4,
+#: each no larger than torch's at the same dtype. A format missing here is read on torch only.
+MLX_MEASURED: set[str] = {"semif", "quyet", "open-spark-jev"}
 #: The runtime configs a letters spec can be built from, by file name, in the order they are looked for.
 RUNTIME_CONFIGS = ("jevk5_config.json", "quyet_config.json", "calibration.json")
+
+
+def unsupported_backend(spec: "LetterSpec", backend: str) -> str | None:
+    """Why `backend` cannot read this model, or None: torch always, mlx once its format's parity is measured."""
+    if backend == "torch" or (backend == "mlx" and spec.format in MLX_MEASURED):
+        return None
+    if backend == "mlx":
+        return (f"its {spec.format} format is read with backend 'torch' for now: its parity with the model's "
+                "runtime is not measured on mlx")
+    return f"a letter-readout model is read with backend 'torch' or 'mlx', not {backend!r}"
 
 
 # --- the spec --------------------------------------------------------------------------------------
