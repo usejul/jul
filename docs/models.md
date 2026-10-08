@@ -421,7 +421,10 @@ a plain language model is refused, since Unsloth would put an untrained head on 
 models on an NVIDIA (or AMD, Intel) GPU, not on a Mac, and `--backend` other than `torch` is refused. The
 first call loads the model. As for Laya, no `method`, no heads or calibration from a context, no `autotune`,
 no `pack`; the answers are Unsloth's own (`confidence` calibrated by `FastDecisionModel.calibrate`), and
-`usage` stays at 0 (`predict` does not report tokens). Unsloth reads up to 16,384 tokens and cuts the rest
+`usage` stays at 0 (`predict` does not report tokens). A model trained in 4-bit (QLoRA, the guide's default)
+is calibrated on its 4-bit base: loaded in 16-bit, as `from_pretrained` does by default and as JuL loads it, its
+probabilities move a little (in our 60-step smoke run, a Noul went from 0.84 to 0.75, the choices stayed within
+0.01). Unsloth reads up to 16,384 tokens and cuts the rest
 without telling the caller, so `usage.truncated_tokens` stays at 0 and `on_long="error"` does
 not refuse a long state. Unsloth's decision code is published under AGPL-3.0: JuL only calls it, through
 the optional `unsloth` extra.
