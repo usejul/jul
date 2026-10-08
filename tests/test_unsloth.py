@@ -22,17 +22,18 @@ Q = {"team": Choice("Which team?", {"billing": "invoices, payments, refunds", "t
      "anger": Score("How angry?", ["calm", "annoyed", "furious"]),
      "topic": Choice("Topic?", ["sport", "finance"])}
 
-#: What unsloth 2026.10.2's `FastDecisionModel.predict` returned for Q (extra fields included).
+#: What unsloth 2026.10.2's `FastDecisionModel.predict` returned for Q (extra fields included), on Qwen3.5-0.8B
+#: trained with the guide's recipe cut to 60 steps (smoke run of #52, A10G).
 ANSWERS = {
-    "team": {"type": "choice", "choice": "billing", "confidence": 0.9312,
-             "probabilities": {"billing": 0.9312, "technical": 0.0401, "sales": 0.0287}, "answer": "billing"},
-    "urgent": {"type": "noul", "noul": 0.8154, "answer": True, "probabilities": {"false": 0.1846, "true": 0.8154}},
-    "refund": {"type": "noul", "noul": 0.9566, "answer": True, "probabilities": {"false": 0.0434, "true": 0.9566}},
-    "anger": {"type": "score", "score": 1.2675, "confidence": 0.6034, "legend": {"0": "calm", "1": "annoyed",
+    "team": {"type": "choice", "choice": "billing", "confidence": 0.9883,
+             "probabilities": {"billing": 0.9883, "technical": 0.0018, "sales": 0.0099}, "answer": "billing"},
+    "urgent": {"type": "noul", "noul": 0.8327, "answer": True, "probabilities": {"true": 0.8327, "false": 0.1673}},
+    "refund": {"type": "noul", "noul": 0.5635, "answer": True, "probabilities": {"true": 0.5635, "false": 0.4365}},
+    "anger": {"type": "score", "score": 1.3963, "confidence": 0.5969, "legend": {"0": "calm", "1": "annoyed",
                                                                                "2": "furious"},
-              "probabilities": {"0": 0.0646, "1": 0.6034, "2": 0.332}, "answer": 1},
-    "topic": {"type": "choice", "choice": "finance", "confidence": 0.8873,
-              "probabilities": {"sport": 0.1127, "finance": 0.8873}, "answer": "finance"},
+              "probabilities": {"0": 0.0034, "1": 0.5969, "2": 0.3997}, "answer": 1},
+    "topic": {"type": "choice", "choice": "finance", "confidence": 0.9713,
+              "probabilities": {"sport": 0.0287, "finance": 0.9713}, "answer": "finance"},
 }
 
 
@@ -67,11 +68,11 @@ def test_answers_come_back_typed_with_unsloth_s_own_numbers(fake_unsloth):
     r = client.system_one(state={"ticket": "charged twice"}, questions=Q)
     assert client.model == "unsloth:./qwen-decisions" and r.model == "unsloth:./qwen-decisions"
     assert r.usage.input_tokens == 0  # predict does not report token counts
-    assert r.choices["team"] == ChoiceAnswer("billing", {"billing": 0.9312, "technical": 0.0401, "sales": 0.0287},
-                                             0.9312)
-    assert r.nouls["urgent"] == NoulAnswer(0.8154) and r.nouls["refund"] == NoulAnswer(0.9566)
-    assert r.scores["anger"] == ScoreAnswer(1.2675, {"0": "calm", "1": "annoyed", "2": "furious"},
-                                            {"0": 0.0646, "1": 0.6034, "2": 0.332}, 0.6034)
+    assert r.choices["team"] == ChoiceAnswer("billing", {"billing": 0.9883, "technical": 0.0018, "sales": 0.0099},
+                                             0.9883)
+    assert r.nouls["urgent"] == NoulAnswer(0.8327) and r.nouls["refund"] == NoulAnswer(0.5635)
+    assert r.scores["anger"] == ScoreAnswer(1.3963, {"0": "calm", "1": "annoyed", "2": "furious"},
+                                            {"0": 0.0034, "1": 0.5969, "2": 0.3997}, 0.5969)
     assert r.choices["topic"].choice == "finance"
     assert "answer" not in r.as_dict()["answers"]["team"]
     assert "probabilities" not in r.as_dict()["answers"]["urgent"]
