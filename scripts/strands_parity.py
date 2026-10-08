@@ -56,8 +56,16 @@ def probabilities(answer: dict | object, q: dict) -> dict[str, float]:
 
 
 def run_ref(checkpoint: str, reqs: list[dict], device: str) -> list[dict]:
-    from strands_decider.infer import load_engine
-    engine = load_engine(checkpoint, device=device)
+    from strands_decider.infer import EngineConfig, load_engine
+    from strands_decider.vision import load_vision_engine
+    # A checkpoint saved by image training (v22) keeps its adapter on the multimodal decoder
+    # (`language_model.…`): its runtime loads it as `strands-decider serve --vision` does. Text questions run
+    # through the same decoder weights either way.
+    adapter = json.loads(open(os.path.join(checkpoint, "lora", "adapter_config.json")).read())
+    if str(adapter.get("target_modules", "")).startswith("^language_model"):
+        engine = load_vision_engine(checkpoint, EngineConfig(device=device))
+    else:
+        engine = load_engine(checkpoint, device=device)
     out = []
     for r in reqs:
         resp = engine.ask(r["state"], {n: _strands_question(q) for n, q in r["questions"].items()})
