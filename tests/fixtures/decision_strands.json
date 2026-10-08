@@ -1,0 +1,52 @@
+{
+ "method": "pointer",
+ "about": "strands-decider-4B-hobson-v22: Qwen3.5-4B + LoRA, pointer head with a LayerNorm. Format of Strands Decider (prompting.py): plain-text tags, options read at the last token of their line.",
+ "text": {
+  "prefix": "<state>\n{state}\n</state>\n",
+  "branch": "<question type=\"{kind}\">\n{header}\n{instructions}\n<options>\n{options}\n</options>\n</question>\n<answer>",
+  "headers": {
+   "choice": "Select exactly one option.",
+   "noul": "Decide whether the statement is true of the state.",
+   "score": "Rate the state against the ordered levels below (lowest first)."
+  },
+  "option": "{number}. {name}",
+  "option_with_description": "{number}. {name} \u2014 {description}",
+  "option_separator": "\n",
+  "collapse_whitespace": true,
+  "score_name": "{index}",
+  "noul_defaults": {
+   "false": "the statement does not hold for this state",
+   "true": "the statement holds for this state"
+  }
+ },
+ "noul_options": [
+  "false",
+  "true"
+ ],
+ "state_render": "json-indent",
+ "add_special_tokens": true,
+ "readout": {
+  "layer": "last_normed",
+  "question_token": "last",
+  "option_token": "option_line"
+ },
+ "head": {
+  "file": "pointer_head.npz",
+  "query": "q",
+  "key": "k",
+  "norm": "norm",
+  "norm_eps": 1e-05,
+  "dim": 256,
+  "temperature": 0.8939122259616745,
+  "temperature_by_kind": {
+   "noul": 1.0143052922252125,
+   "choice": 0.6246728003026183,
+   "score": 0.5203771293158895
+  }
+ },
+ "limits": {
+  "max_length": 4096,
+  "max_state_tokens": 4096,
+  "max_branch_tokens": 3072
+ }
+}
