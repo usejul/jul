@@ -27,6 +27,11 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   (`jevk5_config.json`, `quyet_config.json`, `calibration.json`) or a `decision.json` with
   `"method": "letters"`; nothing is fitted. JevK5's knockout reads more than 16 options.
   `scripts/letters_parity.py` compares the probabilities with each runtime on its README examples.
+- **Strands Decider checkpoints** (#42): `decision.json` gains `layout: "text"` (readout positions from
+  character spans, for plain-text markers), an optional LayerNorm in the pointer head, a temperature per type
+  and an indented-JSON state; all default to the Kev format's behaviour. `scripts/convert_strands_decider.py`
+  turns a release archive into a jul decision model (sha256 checked, LoRA merged tensor by tensor);
+  `scripts/strands_parity.py` compares jul with Strands Decider's own code.
 
 - **Opt-in OpenTelemetry export** (`JUL_ENABLE_TELEMETRY=1`, `pip install "jul[otel]"`): metrics (`jul.session.count`,
   `jul.decision.count`, `jul.token.usage`, `jul.request.duration`, `jul.decision.confidence`, `jul.request.error.count`)
