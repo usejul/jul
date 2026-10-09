@@ -98,6 +98,126 @@ def test_mlx_answers_match_kev(tmp_path, monkeypatch, weights, tolerance):
     client.close()
 
 
+STRANDS = json.loads((FIXTURES / "decision_strands_cases.json").read_text())
+
+
+@pytest.fixture(scope="module")
+def strands_reader():
+    """Strands Decider's format (fixtures/decision_strands.json) on the Qwen3.5-4B tokenizer.
+
+    fixtures/decision_strands_cases.json was written by Strands Decider's own code (git 9800d14), see
+    scripts/strands_decider_fixture.py: the ids its engine feeds the model, and where its pointer head reads.
+    """
+    transformers = pytest.importorskip("transformers")
+    t = STRANDS["tokenizer"]
+    try:
+        tok = transformers.AutoTokenizer.from_pretrained(t["repo"], revision=t["revision"], local_files_only=True)
+    except Exception:
+        pytest.skip("the Qwen3.5-4B tokenizer is not in the local Hugging Face cache")
+
+    class Backbone:
+        name, tokenizer = "strands-decider", tok
+
+    return PointerReader(Backbone(), DecisionSpec.load(FIXTURES, FIXTURES / "decision_strands.json"))
+
+
+@pytest.mark.parametrize("case", STRANDS["cases"], ids=lambda c: "+".join(c["request"]["questions"]))
+def test_requests_are_encoded_token_for_token_like_strands_decider(strands_reader, case):
+    req = case["request"]
+    reserve = max(len(b["ids"]) for b in case["branches"])
+    assert strands_reader.encode_state(req["state"], reserve) == case["prefix"]
+    for q, want in zip(req["questions"].values(), case["branches"]):
+        texts, _ = strands_reader.option_texts(kind(q), options_of(question(q)))
+        branch, q_idx, opt_idx = strands_reader.encode_question(q["instructions"], texts, kind(q))
+        assert (branch, q_idx, opt_idx) == (want["ids"], want["question"], want["options"])
+
+
+@pytest.mark.parametrize("case", STRANDS["cases"], ids=lambda c: "+".join(c["request"]["questions"]))
+def test_a_call_leaves_the_state_what_its_longest_question_does_not_take(strands_reader, case):
+    """`logits` encodes the questions first, so a long state is cut where Strands Decider cuts it."""
+    seen = []
+
+    class Backbone:
+        name, tokenizer = "strands-decider", strands_reader.backbone.tokenizer
+
+        def cache_prefix(self, ids):
+            seen.append(ids)
+
+        def last_hidden(self, ids, prefix=None):
+            seen.append(ids)
+            return np.zeros((len(ids), 2), dtype=np.float32)
+
+    reader = PointerReader(Backbone(), strands_reader.spec)
+    reader._head = (np.zeros((4, 2)), np.zeros(4), np.zeros((4, 2)), np.zeros(4), np.ones(2), np.zeros(2))
+    req = case["request"]
+    reader.logits(req["state"], [(kind(q), q["instructions"], options_of(question(q)))
+                                 for q in req["questions"].values()])
+    assert seen == [case["prefix"]] + [b["ids"] for b in case["branches"]]
+
+
+def test_strands_noul_shows_the_models_defaults_and_maps_back(strands_reader):
+    options = options_of(Noul("Late?", NoulCriteria(true="the parcel is late")))
+    texts, index = strands_reader.option_texts("noul", options)
+    assert texts == ["1. false \u2014 the statement does not hold for this state", "2. true \u2014 the parcel is late"]
+    assert [options[i].key for i in index] == ["false", "true"]
+
+
+def test_strands_head_layer_norm_and_temperature_per_type(tmp_path):
+    """jul's numpy head against Strands Decider's PointerHead (torch numbers in the fixture) and a numpy
+    rewrite of it: one LayerNorm on both sides, q and k, a dot product scaled by dim ** -0.5, then the
+    temperature of each question's type."""
+    h = STRANDS["head"]
+    w = {k: np.asarray(v, dtype=np.float32) for k, v in h["weights"].items()}
+    np.savez(tmp_path / "pointer_head.npz", **w)
+    d = json.loads((FIXTURES / "decision_strands.json").read_text())
+    d["head"]["dim"] = h["dim"]
+    (tmp_path / "decision.json").write_text(json.dumps(d))
+    spec = DecisionSpec.load(tmp_path)
+
+    def layer_norm(x):
+        mu, var = x.mean(-1, keepdims=True), x.var(-1, keepdims=True)
+        return (x - mu) / np.sqrt(var + 1e-5) * w["norm_weight"] + w["norm_bias"]
+
+    def read(kind_: str, hidden: np.ndarray, n: int) -> np.ndarray:
+        """The head on `hidden`: its first `n` rows are the options, its last the question."""
+        class Backbone:
+            name, tokenizer = "synthetic", None
+
+            def cache_prefix(self, ids):
+                return None
+
+            def last_hidden(self, ids, prefix=None):
+                return hidden
+
+        reader = PointerReader(Backbone(), spec)
+        reader.encode_state = lambda state, reserve=0: []
+        reader.encode_question = lambda instructions, texts, k=None: (list(range(len(hidden))), len(hidden) - 1,
+                                                                      list(range(n)))
+        q = (Noul("x?") if kind_ == "noul" else Choice("x?", [f"o{i}" for i in range(n)]) if kind_ == "choice"
+             else Score("x?", [f"l{i}" for i in range(n)]))
+        (z,), _ = reader.logits("state", [(kind_, "x?", options_of(q))])
+        return z
+
+    for kind_, decide, opts, want in zip(h["kinds"], h["decide"], h["options"], h["logits"]):
+        decide, opts = np.asarray(decide, dtype=np.float32), np.asarray(opts, dtype=np.float32)
+        n = 2 if kind_ == "noul" else len(opts)
+        z = read(kind_, np.vstack([opts, decide]), n)                      # options first, the question last
+        q_ = layer_norm(decide) @ w["q_weight"].T + w["q_bias"]
+        k_ = layer_norm(opts[:n]) @ w["k_weight"].T + w["k_bias"]
+        ref = (k_ @ q_) * h["dim"] ** -0.5 / spec.temperature_for(kind_)
+        if kind_ == "noul":                                                # read (false, true), reported (true, false)
+            ref, want = ref[::-1], want[:n][::-1]
+        np.testing.assert_allclose(z, ref, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(z, want[:n], rtol=1e-4, atol=1e-5)
+    assert spec.temperature_for("choice") == 0.6246728003026183 and spec.temperature_for("other") == spec.temperature
+
+
+def test_a_kev_spec_keeps_one_temperature_and_no_norm():
+    spec = DecisionSpec.load(FIXTURES, FIXTURES / "decision_minicpm5-2b.json")
+    assert spec.text is None and spec.norm is None and spec.max_length is None and spec.state_render == "jul"
+    assert {spec.temperature_for(k) for k in ("choice", "noul", "score")} == {spec.temperature}
+
+
 def test_mlx_gets_the_rope_base_that_transformers_5_moved(tmp_path):
     """Without it mlx-lm silently uses 10000 instead of the model's base, and answers are wrong."""
     pytest.importorskip("mlx")

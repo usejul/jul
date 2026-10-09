@@ -32,6 +32,11 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   text-only Qwen3.5 checkpoints they ship (`model_type: qwen3_5_text`, read as `qwen3_5`).
   `scripts/letters_parity.py` takes `--backend`, `--dtype`, and `--save-reference` / `--reference` to compare
   with runtimes run elsewhere (e.g. float32 on a GPU).
+- **Strands Decider checkpoints** (#42): `decision.json` gains `layout: "text"` (readout positions from
+  character spans, for plain-text markers), an optional LayerNorm in the pointer head, a temperature per type
+  and an indented-JSON state; all default to the Kev format's behaviour. `scripts/convert_strands_decider.py`
+  turns a release archive into a jul decision model (sha256 checked, LoRA merged tensor by tensor);
+  `scripts/strands_parity.py` compares jul with Strands Decider's own code.
 
 - **Opt-in OpenTelemetry export** (`JUL_ENABLE_TELEMETRY=1`, `pip install "jul[otel]"`): metrics (`jul.session.count`,
   `jul.decision.count`, `jul.token.usage`, `jul.request.duration`, `jul.decision.confidence`, `jul.request.error.count`)

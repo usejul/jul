@@ -319,6 +319,26 @@ the pointer head for Choice and Noul, the vector reading for a routed question (
 
 A state longer than the limit in its `decision.json` is truncated rather than stretched.
 
+### Strands Decider (pointer head at `<answer>`)
+
+[Strands Decider](https://github.com/strands-labs/strands-decider) checkpoints (Apache-2.0) are a LoRA on
+`Qwen/Qwen3.5-4B` plus a pointer head, released as an archive rather than as a model repo. Their prompt is plain
+text (`<state>…</state><question type="…">…<options>1. name — description…</options></question><answer>`), the
+query is the last token of `<answer>` and each option is read at the last token of its line. Convert the archive
+once, then add the directory like any decision model:
+
+```bash
+python scripts/convert_strands_decider.py strands-decider-4B-hobson-v22.tar ./strands-v22 --sha256 7305d520...
+jul models add strands-v22 --repo ./strands-v22 --backend torch
+```
+
+The converter checks the archive, merges the LoRA into the pinned base tensor by tensor (the model is never
+loaded: 21 s and 2.8 GB of memory for the 4B), and writes `decision.json` with the four options this format
+needs: `layout: "text"` (positions from character spans), a LayerNorm in the head, a temperature per type, and
+a JSON state rendered as indented JSON. Their defaults are the Kev format's behaviour, so other decision models
+do not change. Text questions only (no image path). An unofficial candidate: its JevBench numbers are the
+author's estimate, not ours; `scripts/strands_parity.py` compares jul with Strands Decider's own code.
+
 ### Letter-readout decision models (JevK5, Plumb, Quyet, spark-s1)
 
 Other open decision models answer with a letter: a causal LM with a merged LoRA, trained to write the letter
