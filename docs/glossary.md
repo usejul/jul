@@ -57,10 +57,18 @@ write.
 
 **Hybrid head.** A head that reads both the model's vectors and the TF-IDF of the text.
 
+**Input limit.** The most tokens a reading takes (a `cross.json`'s `max_length`, a `decision.json`'s
+`max_state_tokens`, an encoder's positions). Past it the end is dropped, logged and counted in
+`usage.truncated_tokens`; `on_long="error"` refuses the call instead. [More](models.md#input-limits).
+
 **Jev.** TypeSafe's hosted decision model, whose SDK and HTTP protocol JuL follows. JuL is not affiliated
 with TypeSafe.
 
 **Jev bench.** Jev's published benchmark: 300 examples over AG News, Banking77 and Emotion, all `Choice`.
+
+**Letter-readout model.** A decision model that answers with an option letter after its own prompt
+(JevK5, plumb-4b, Quyet, spark-s1), read from the letters' logits as its runtime reads them.
+[More](models.md#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1).
 
 **Noul.** A yes/no question. Answers `noul`, the probability of yes.
 

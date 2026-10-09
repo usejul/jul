@@ -34,7 +34,9 @@ Anything on the Hugging Face Hub, or in a local directory, that JuL can load on 
 | --- | --- | --- | --- |
 | **Embedding LLMs** | decoders fine-tuned for embeddings, read at a middle layer | `wemm-4b-4bit` (built in), `wemm-9b`, `f2llm-1.7b`, `qwen3-embedding-0.6b`, `harrier-0.6b` | sorting one text into options, zero-shot |
 | **Any decoder** | a general LLM read the same way | `minicpm5-2b` (built in), `bitnet-2b`, any instruct model | trying a model you already use |
-| **Decision models** | trained to answer typed questions, bring their own format in a `decision.json` | `jul-decision-minicpm5-2b` | questions that read two things together |
+| **Decision models** | trained to answer typed questions, bring their own format in a `decision.json` | `jul-decision-minicpm5-2b`, Kev checkpoints, [Strands Decider](models.md#strands-decider-pointer-head-at-answer) | questions that read two things together |
+| **Letter-readout models** | LLMs trained to answer with an option letter after their own prompt, read as their runtime reads them | [JevK5, plumb-4b, Quyet, spark-s1](models.md#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1) | open decision models published with their own runtime |
+| **Laya** | a decision model on its own runtime (`laya` package): JuL hands it the questions | `laya`, `laya:multilingual` ([Laya](models.md#laya)) | Laya's answers through JuL's API, as a tier or next to the others |
 | **Cross models (adapters)** | LoRA adapters that read the question and the text together, on the same weights | `jul-decision-wemm-4b` (the default), `jul-decision-wemm-4b-4bit` | yes/no and choices (the default), scores (`-4bit`), one model in memory |
 | **Encoders** | small bidirectional models, read as their sentence embedding | `e5-small`, `jul-decision-e5-small` | milliseconds, CPU only, Lambda |
 | **Contrastive heads** | projection heads on a frozen backbone | `clm-8b` (CLM's heads on Qwen3-8B), your own with `--train-heads` | reusing heads trained elsewhere |
@@ -44,12 +46,15 @@ jul models add harrier-0.6b --repo majentik/harrier-oss-v1-0.6b-MLX-4bit     # a
 jul models add my-model --repo org/Some-Instruct-3B                          # any decoder
 jul models add jul-decision-minicpm5-2b --repo usejul/jul-decision-minicpm5-2b-mlx-4bit   # a decision model
 jul models add clm-8b --repo Contrastive-LM/CLM-v0.1-8B                       # contrastive heads
+jul models add jevk5 --repo alibiserikbay/JevK5                              # a letter-readout model
 jul models                                                                   # what you have
 ```
 
-What `jul models add` recognizes by itself: a repo with a `decision.json` is a decision model, one with a
-CLM `config.json` or a `contrastive.json` gets contrastive heads, one carrying a `cross/` folder gets its
-cross model attached. Everything else is fitted as a vector preset. The 18 models we measured, with their
+What `jul models add` recognizes by itself: a repo with a `decision.json` is a decision model (a
+`"method": "letters"` one, or the runtime config of JevK5, Quyet or spark-s1, is a letter-readout model), one
+with a CLM `config.json` or a `contrastive.json` gets contrastive heads, one carrying a `cross/` folder gets its
+cross model attached. Everything else is fitted as a vector preset. A Strands Decider archive is converted
+first (`scripts/convert_strands_decider.py`); Laya needs no `add` (`--model laya`). The 18 models we measured, with their
 scores: [Models](models.md#every-model-measured).
 
 ## Backends

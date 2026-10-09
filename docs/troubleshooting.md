@@ -60,6 +60,18 @@ Anyone on the network can query it. Set `JUL_API_KEY` (or `--api-key`); callers 
 `403`: the server has a key and the request carries none. `401`: the request carries the wrong one.
 `/health` needs the key too.
 
+### `input cut: <reading> reads at most N tokens, M tokens past it were dropped`
+
+A warning, not an error: the state was longer than that reading's limit, so its end was not read and the
+answer comes from its beginning. `usage.truncated_tokens` says how much was dropped. Shorten the state (put
+what decides first), pick a model with a longer limit, or pass `on_long="error"` to refuse such calls
+instead. The limit of each reading: [input limits](models.md#input-limits).
+
+### `the state is over the input limit of <reading> (N tokens, M more)`
+
+`jul.truncation.InputTooLong`, raised with `on_long="error"` (HTTP 400 from `jul serve`). The call was not
+answered. Shorten the state, or pass `on_long="cut"` to answer on its beginning.
+
 ## Accuracy
 
 ### It picks a wrong option with high confidence
