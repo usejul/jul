@@ -91,6 +91,33 @@ def _croppable(cache) -> bool:
     return type(cache) is DynamicCache and all(type(layer) is DynamicLayer for layer in cache.layers)
 
 
+def _bare_multimodal(config) -> bool:
+    """A multimodal base model saved without a head (Decision 3.0's `Qwen3_5Model`): its text weights are
+    named `language_model.*` and the causal LM reads them as `model.*`."""
+    archs = getattr(config, "architectures", None) or []
+    return bool(archs) and all(a.endswith("Model") for a in archs) and getattr(config, "text_config", None) is not None
+
+
+def _load_causal_lm(repo: str, dtype: torch.dtype):
+    config = AutoConfig.from_pretrained(repo)
+    if not _bare_multimodal(config):
+        return AutoModelForCausalLM.from_pretrained(repo, dtype=dtype)
+    # the text model alone, its weights renamed; the vision tower's are left out (not reported: transformers
+    # would list each of them as unexpected, and the missing ones are checked here)
+    from transformers.utils import logging as hf_logging
+    level = hf_logging.get_verbosity()
+    hf_logging.set_verbosity_error()
+    try:
+        model, info = AutoModelForCausalLM.from_pretrained(repo, dtype=dtype, output_loading_info=True,
+                                                           key_mapping={r"^language_model\.": "model."})
+    finally:
+        hf_logging.set_verbosity(level)
+    if info["missing_keys"]:
+        raise ValueError(f"{repo}: {len(info['missing_keys'])} weights of its text model are missing "
+                         f"(e.g. {sorted(info['missing_keys'])[0]})")
+    return model
+
+
 class TorchBackbone(Backbone):
     backend = "torch"
 
@@ -99,7 +126,7 @@ class TorchBackbone(Backbone):
         super().__init__(name)
         self.device, dtype = _device_dtype(device, dtype)
         self.tokenizer = AutoTokenizer.from_pretrained(self.repo)
-        self.model = AutoModelForCausalLM.from_pretrained(self.repo, dtype=dtype).to(self.device).eval()
+        self.model = _load_causal_lm(self.repo, dtype).to(self.device).eval()
         self._decoder = self.model.get_decoder()
         self._lm_head = self.model.get_output_embeddings()
         layers = self._decoder.layers
@@ -174,6 +201,22 @@ class TorchBackbone(Backbone):
         finally:
             if prefix is not None and prefix.croppable:
                 prefix.rewind()
+
+    @torch.inference_mode()
+    def last_state(self, tokens, causal: bool = True):
+        self._want, self._stop_at = set(), None
+        ids = torch.tensor([tokens], device=self.device)
+        mask = None
+        if not causal:
+            # d3_runtime.PromptEncoder for one unpadded prompt: the full-attention layers get a key mask
+            # that hides nothing (so no causal mask), the linear-attention ones none (their causal scan).
+            # The model must take a mask per layer type (Qwen3.5's does).
+            if "full_attention" not in (getattr(self._decoder.config, "layer_types", None) or ()):
+                raise ValueError(f"{self.name}: non-causal attention needs a model with layer types (Qwen3.5)")
+            keys = torch.ones(1, 1, 1, len(tokens), dtype=torch.bool, device=self.device)
+            mask = {"full_attention": keys, "linear_attention": None}
+        h = self._decoder(input_ids=ids, attention_mask=mask, use_cache=False).last_hidden_state
+        return h[0, -1].float().cpu().numpy()
 
     @staticmethod
     def _first(result):
