@@ -19,14 +19,16 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   `jul bench --on-long`): past a reading's limit, answer on what was read (default, unchanged) or refuse the
   call (`jul.truncation.InputTooLong`, a `ValueError`; HTTP 400) naming the reading and its limit. Only a cut of
   the state is refused; an option description cut to its own limit is logged and counted. `jul bench --on-long
-  error` counts the refused rows in `refused_rows`, the accuracy is over the others (#36).
+  error` counts the refused rows in `refused_rows`, the accuracy is over the others (#36). See
+  [docs/python-api.md](docs/python-api.md#typesafeclient) and [docs/serve.md](docs/serve.md#what-jul-adds).
 
 - **Letter-readout decision models** (#41): JevK5, plumb-4b, Quyet-1.0-Medium and spark-s1-4b-v6, which answer
   with the logits of their option letters after their own prompt, divided by a calibration temperature, are read
   as their own runtime reads them. `jul models add NAME --repo REPO` recognises them by their runtime's config
   (`jevk5_config.json`, `quyet_config.json`, `calibration.json`) or a `decision.json` with
   `"method": "letters"`; nothing is fitted. JevK5's knockout reads more than 16 options.
-  `scripts/letters_parity.py` compares the probabilities with each runtime on its README examples.
+  `scripts/letters_parity.py` compares the probabilities with each runtime on its README examples. See
+  [docs/models.md](docs/models.md#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1).
 - **Letter-readout models on MLX** (#54): `--backend mlx` reads the four of them, measured against their runtimes
   in float32 (largest gap 4.2e-3 in bf16, no larger than torch's at the same dtype). mlx-lm now loads the
   text-only Qwen3.5 checkpoints they ship (`model_type: qwen3_5_text`, read as `qwen3_5`).
@@ -36,7 +38,8 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   character spans, for plain-text markers), an optional LayerNorm in the pointer head, a temperature per type
   and an indented-JSON state; all default to the Kev format's behaviour. `scripts/convert_strands_decider.py`
   turns a release archive into a jul decision model (sha256 checked, LoRA merged tensor by tensor);
-  `scripts/strands_parity.py` compares jul with Strands Decider's own code.
+  `scripts/strands_parity.py` compares jul with Strands Decider's own code. See
+  [docs/models.md](docs/models.md#strands-decider-pointer-head-at-answer).
 
 - **Opt-in OpenTelemetry export** (`JUL_ENABLE_TELEMETRY=1`, `pip install "jul[otel]"`): metrics (`jul.session.count`,
   `jul.decision.count`, `jul.token.usage`, `jul.request.duration`, `jul.decision.confidence`, `jul.request.error.count`)

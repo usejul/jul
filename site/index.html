@@ -432,7 +432,7 @@ ul.mac li::before { content: ""; position: absolute; left: 0; top: .55em; width:
           <p>Run a model, or route to a server. Same <code>Choice</code> / <code>Noul</code> / <code>Score</code>
           calls, same response, whatever answers.</p>
           <div class="chips">
-            <span>Hugging Face</span><span>Kev models</span><span>Laya</span><span>Encoders · ONNX</span>
+            <span>Hugging Face</span><span>Kev models</span><span>Strands Decider</span><span>JevK5 · Quyet · spark-s1</span><span>Laya</span><span>Encoders · ONNX</span>
             <span>Ollama</span><span>OpenAI</span><span>Mistral</span><span>Jev</span><span>Clef</span><span>your fine-tune</span>
           </div>
         </div>
@@ -442,7 +442,7 @@ ul.mac li::before { content: ""; position: absolute; left: 0; top: .55em; width:
           <p>No model to pick, no prompt to write, no layer to choose. <code>jul setup</code> downloads a model
           picked and calibrated for typed questions: probabilities you can threshold on.</p>
 <pre class="scroll">model="accurate"   <span class="dim"># default · 4B · 2.6 GB</span>
-model="fast"       <span class="dim"># 2B · 1.3 GB</span></pre>
+model="fast"       <span class="dim"># 2B · 1.4 GB</span></pre>
         </div>
         <div class="pillar" id="autotune">
           <p class="num">3</p>
@@ -475,6 +475,8 @@ model="fast"       <span class="dim"># 2B · 1.3 GB</span></pre>
           <tr><th>Any decoder<small>MiniCPM, any instruct model</small></th><td class="y"></td><td class="y"></td><td class="p"></td><td class="n"></td><td class="y"></td><td class="y"></td></tr>
           <tr><th>Encoders<small>e5, BERT, XLM-R, jul-decision-e5-small</small></th><td class="n"></td><td class="y"></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="y"></td></tr>
           <tr><th>Decision models<small>Kev format, jul-decision-minicpm5-2b</small></th><td class="y"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="n"></td></tr>
+          <tr><th>Strands Decider<small>converted once, then a decision model</small></th><td class="q"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="q"></td><td class="n"></td></tr>
+          <tr><th>Letter-readout models<small>JevK5, plumb-4b, Quyet, spark-s1</small></th><td class="y"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
           <tr><th>Contrastive heads<small>CLM-8B</small></th><td class="y"></td><td class="y"></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="n"></td></tr>
           <tr><th>Embeddings APIs<small>Ollama, OpenAI, Mistral, Voyage</small></th><td class="n"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="q"></td><td class="q"></td></tr>
           <tr><th>Laya<small>its own runtime</small></th><td class="n"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
@@ -589,16 +591,19 @@ client.autotune("tickets", {"team": team}, labeled)</pre>
   </section>
 
   <!-- ── WHAT'S NEW ─────────────────────────────────────────── -->
-  <section class="win c7" id="new" aria-label="New in 0.5">
-    <div class="tbar"><span class="cbox" role="button" aria-label="Shade window" tabindex="0"></span><h2 class="ttl">New in 0.5</h2></div>
+  <section class="win c7" id="new" aria-label="Latest">
+    <div class="tbar"><span class="cbox" role="button" aria-label="Shade window" tabindex="0"></span><h2 class="ttl">Latest</h2></div>
     <div class="wbody">
-      <p class="eyebrow">New in 0.5</p>
+      <p class="eyebrow">Since 0.5</p>
       <h2 class="h">Lately.</h2>
       <ul class="mac">
         <li><b>Autotune on decision models.</b> <code>fast</code> and <code>accurate</code> learn your task too.</li>
         <li><b>Bench against the cloud.</b> <code>jul bench</code> puts Jev, Ollama, Clef or any System One URL next to your local models.</li>
         <li><b>Cascades, measured.</b> <code>--escalate-to</code>: accuracy of the pair and share of questions sent out.</li>
         <li><b>A new <code>fast</code>.</b> A decision model trained on human-written decisions.</li>
+        <li><b>Other open decision models.</b> Strands Decider checkpoints, and JevK5, plumb-4b, Quyet and spark-s1 read at their option letters, as their own runtimes read them. <a href="docs/models.html#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1">How →</a></li>
+        <li><b>No silent cut.</b> A text longer than the model reads is logged and counted in <code>usage.truncated_tokens</code>; <code>on_long="error"</code> refuses it. <a href="docs/models.html#input-limits">Limits →</a></li>
+        <li><b>Telemetry, opt-in.</b> <code>JUL_ENABLE_TELEMETRY=1</code> sends metrics and events to your OpenTelemetry collector, local and remote deciders alike. Off by default. <a href="docs/telemetry.html">How →</a></li>
       </ul>
       <p class="note"><a href="https://github.com/usejul/jul/blob/main/CHANGELOG.md">Full changelog →</a></p>
     </div>
@@ -944,7 +949,7 @@ latency per decision, and the answer to the ticket.</pre>
       { name: "Model", q: "What reads it", icon: "mac",
         def: ["accurate", "the default · 4B", "accurate — the default model, jul-decision-wemm-4b: 4B parameters, 2.6 GB on a Mac in 4-bit. What reads your text when you choose nothing."],
         alts: [
-          ["fast", "2B · half the size", "fast — jul-decision-minicpm5-2b: 2B parameters, 1.3 GB on a Mac in 4-bit, half the size of the default."],
+          ["fast", "2B · half the size", "fast — jul-decision-minicpm5-2b: 2B parameters, 1.4 GB on a Mac in 4-bit, half the size of the default."],
           ["any Hugging Face model", "LLM, embedding model, encoder, decision model", "any Hugging Face model — an LLM, an embedding model, a small encoder (e5, BERT, XLM-R) or a decision model: jul models add fits it once. See the table below."],
           ["an embeddings API", "no weights here: Ollama · OpenAI · Mistral · Voyage", "an embeddings API — the model runs elsewhere, JuL reads its embeddings over HTTP (--backend api)."],
           ["Laya", "its own runtime: no autotune, no pack", "Laya — a decision model with its own runtime: JuL hands it the questions; autotune and jul pack do not apply."]] },
