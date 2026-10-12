@@ -339,7 +339,7 @@ a JSON state rendered as indented JSON. Their defaults are the Kev format's beha
 do not change. Text questions only (no image path). An unofficial candidate: its JevBench numbers are the
 author's estimate, not ours; `scripts/strands_parity.py` compares jul with Strands Decider's own code.
 
-### Letter-readout decision models (JevK5, Plumb, Quyet, spark-s1)
+### Letter-readout decision models (JevK5, Plumb, Quyet, spark-s1, Decision 3.0)
 
 Other open decision models answer with a letter: a causal LM with a merged LoRA, trained to write the letter
 of an option after **its own** fixed prompt, read as the softmax of the option letters' logits divided by a
@@ -352,6 +352,7 @@ jul models add jevk5 --repo alibiserikbay/JevK5                 # --backend torc
 jul models add plumb-4b --repo crh225/plumb-4b
 jul models add quyet-medium --repo chinhnc/Quyet-1.0-Medium
 jul models add spark-s1-4b --repo abhishek085/spark-s1-4b-v6
+jul models add d3-edge --repo vllm-sr/d3-edge
 jul ask noul "Does the customer ask for money back?" --state "I was billed twice, please refund" --model jevk5
 ```
 
@@ -361,6 +362,7 @@ jul ask noul "Does the customer ask for money back?" --state "I was billed twice
 | [plumb-4b](https://huggingface.co/crh225/plumb-4b) | jevk5 | `jevk5_config.json` | SemIf | 16, then knockout | 2.07 |
 | [Quyet-1.0-Medium](https://huggingface.co/chinhnc/Quyet-1.0-Medium) | [quyet](https://github.com/ncchinh/quyet) | `quyet_config.json` | Quyet (prompt version 1 or 2) | 10 | per type |
 | [spark-s1-4b-v6](https://huggingface.co/abhishek085/spark-s1-4b-v6) | [open-spark-jev](https://github.com/abhishek085/open-spark-jev) | `calibration.json` | fenced state, a menu per type | 26 | per type |
+| [d3-edge](https://huggingface.co/vllm-sr/d3-edge), [d3-lite](https://huggingface.co/vllm-sr/d3-lite) | `d3_runtime.py` in the repo | `decision_config.json` | State / Question / Options, codes A..Z, AA.. | 255 | 1.0 |
 
 The spec is stored in the preset (`letters`): the prompt format, the answer letters, how many options one pass
 reads, the temperature per question type and the input limits. A repo can also ship it as a `decision.json`
@@ -401,6 +403,38 @@ every cut ([input limits](#input-limits)), it is logged (`input cut: <model> let
 `on_long="error"`. JevK5 and Plumb refuse a prompt over `max_tokens` (16384), like their runtime:
 `ValueError`, HTTP 400 from `jul serve`. open-spark-jev's `abstain` is not read: its gateway does not add it on
 `/v1/systemone` either.
+
+**Decision 3.0 (d3).** [vLLM Semantic Router](https://github.com/vllm-project/semantic-router)'s decision
+models ([collection](https://huggingface.co/collections/vllm-sr/decision-30), Apache-2.0) ship a Qwen3.5
+backbone, a `decision_config.json` (format `d3-code-readout-v1`) and their own runtime as remote code
+(`d3_runtime.py`). jul reads the weights without that code. The prompt is `d3_format.py`'s: a fixed system
+prompt, then `State:` / `Question:` / `Options:` with one line per option under a code (`A`..`Z`, `AA`..: 255
+single-token codes, listed in the config), and a closing line. A Choice option without a description shows its
+key alone, else `key: description`; a Noul lists `false` then `true`, described by the question's criteria or
+`No / false` / `Yes / true`; a Score lists its levels (2 to 10, as the runtime accepts). The reading differs from
+the other formats in two ways: the hidden state at the last position (after the final norm) is multiplied by
+the model's `readout.safetensors` matrix instead of the LM head, and the full-attention layers see the whole
+prompt (no causal mask; `attention_mode: noncausal_full_attention`), the Gated DeltaNet layers staying causal.
+Each question runs its whole prompt (without the causal mask, no prefix can be shared). The checkpoint is the
+bare multimodal `Qwen3_5Model`: jul loads its text weights only (the vision tower is not read; images and
+video, `permutation_average` and the runtime's AMD kernels are out of scope). jul does not pin Hub revisions:
+to read the commit measured below, pass the snapshot directory as `--repo`.
+
+Parity with `d3_runtime.D3` (`scripts/d3_parity.py`, runtime on CPU in float32), on the README's text requests,
+a 30-option Choice (codes past `Z`) and 50 decision-bench questions (Choice of 2 to 21 options, Noul, Score,
+states up to ~4,000 tokens); every prompt has the runtime's token count:
+
+| Model (commit) | torch float32 | MLX float32 | MLX bf16 | torch bf16 (CPU) | runtime bf16 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| d3-edge (`c322a0dd`) | 2.5e-6 (62/62) | 5.1e-6 (62/62) | 2.1e-2 (62/62) | 2.1e-2 (61/62) | 2.1e-2 (61/62) |
+| d3-lite (`ca41e954`) | 2.6e-6 (62/62) | 1.1e-5 (62/62) | 1.4e-2 (62/62) | 1.7e-2 (62/62) | 1.7e-2 (62/62) |
+
+Largest probability gap over 62 questions (argmax agreement in brackets). In float32 jul is the runtime to within
+float noise on both backends. In bf16 (the weights as published, MLX's default) the gap is bf16's: the runtime
+in bf16, its own default, is as far from its float32 reading. Against that bf16 runtime, torch bf16 gives the
+same probabilities (1.5e-7 on d3-edge) and MLX bf16 is 2.7e-2 (d3-edge) / 3.0e-2 (d3-lite) away, the same answer
+on 61/62 and 62/62 questions. MLX float32 is measured with the weights cast to float32 as they are read (mlx-lm
+adds 1 to Qwen3.5's norm weights while loading, in the stored dtype).
 
 ## Laya
 
@@ -610,7 +644,7 @@ Five ways to read a model. A preset picks one; a call may override it.
 | **vector** (default) | cosine between the state's hidden state and each option's, `softmax(cos / tau)` | preset `method: "vector"` | any model |
 | **letters** | the logits of the option letters (A, B, C…) at the next position | `method="letters"`, per call or per client | any model; a tuned head overrides it |
 | **pointer** | a trained pointer head, at the delimiter tokens of the format in `decision.json` | preset `method: "pointer"` | decision models only |
-| **letter-readout** | the option letters' logits after the model's own prompt, at its own temperature | preset `method: "letter-readout"` | letter-readout decision models only (JevK5, Plumb, Quyet, spark-s1) |
+| **letter-readout** | the option letters' logits after the model's own prompt, at its own temperature (d3: its readout matrix at the last position) | preset `method: "letter-readout"` | letter-readout decision models only (JevK5, Plumb, Quyet, spark-s1, Decision 3.0) |
 | **tuned head** | a logistic head fitted by `autotune` on vector features | `autotune()` plus a `Context` | pins the reading to vectors (on a decision model, its vector fallback) |
 
 A decision model may also **route by option count**: below the threshold the pointer head answers, above

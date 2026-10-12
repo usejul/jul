@@ -32,6 +32,14 @@ Versions come from git tags (see [publishing](docs/publishing.md)): a `v*` tag r
   text-only Qwen3.5 checkpoints they ship (`model_type: qwen3_5_text`, read as `qwen3_5`).
   `scripts/letters_parity.py` takes `--backend`, `--dtype`, and `--save-reference` / `--reference` to compare
   with runtimes run elsewhere (e.g. float32 on a GPU).
+- **Decision 3.0 models** (#63): vLLM Semantic Router's d3-edge and d3-lite (format `d3-code-readout-v1`) are
+  read natively, without their remote code: `jul models add NAME --repo vllm-sr/d3-edge` recognises their
+  `decision_config.json` and stores a letter-readout preset (format `d3`). The prompt is the runtime's token for
+  token (codes `A`..`Z`, `AA`.., up to 255 options); the answer is the model's readout matrix at the last
+  position, with the full-attention layers run without the causal mask, on torch and MLX. The torch and MLX
+  backends load the bare multimodal `Qwen3_5Model` checkpoint's text weights (and MLX its own layer order).
+  `scripts/d3_parity.py` compares with `d3_runtime.D3`: largest gap 1.1e-5 in float32 on 62 questions
+  (both models, both backends), bf16 as far as the runtime's own bf16 (~2e-2).
 - **Strands Decider checkpoints** (#42): `decision.json` gains `layout: "text"` (readout positions from
   character spans, for plain-text markers), an optional LayerNorm in the pointer head, a temperature per type
   and an indented-JSON state; all default to the Kev format's behaviour. `scripts/convert_strands_decider.py`
