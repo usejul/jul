@@ -61,9 +61,9 @@ ATTENTION = ("causal", "noncausal_full_attention")
 #: The formats whose MLX reading was measured against the model's runtime (scripts/letters_parity.py
 #: --backend mlx, against the runtimes in float32): largest probability gap on their README examples, bf16 MLX
 #: weights, 2026-10-08 (#54): semif 4.2e-3 (JevK5 2.0e-3, plumb 4.2e-3), quyet 1.9e-3, open-spark-jev 2.4e-4,
-#: each no larger than torch's at the same dtype. d3 (#63, scripts/d3_parity.py): d3-edge and d3-lite in float32
-#: on MLX within 1e-5 of their runtime; in bf16 as far as torch's bf16 and the runtime's own bf16 are (~2e-2).
-#: A format missing here is read on torch only.
+#: each no larger than torch's at the same dtype. d3 (#63, scripts/d3_parity.py, 62 questions): MLX float32
+#: 5.1e-6 (d3-edge) / 1.1e-5 (d3-lite); bf16 2.1e-2 / 1.4e-2, against torch bf16 2.1e-2 / 1.7e-2 and the
+#: runtime's own bf16 2.1e-2 / 1.7e-2. A format missing here is read on torch only.
 MLX_MEASURED: set[str] = {"semif", "quyet", "open-spark-jev", "d3"}
 #: The runtime configs a letters spec can be built from, by file name, in the order they are looked for.
 RUNTIME_CONFIGS = ("jevk5_config.json", "quyet_config.json", "calibration.json", "decision_config.json")
