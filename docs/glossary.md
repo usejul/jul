@@ -68,7 +68,7 @@ with TypeSafe.
 
 **Letter-readout model.** A decision model that answers with an option letter after its own prompt
 (JevK5, plumb-4b, Quyet, spark-s1), read from the letters' logits as its runtime reads them.
-[More](models.md#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1).
+[More](models.md#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1-decision-30).
 
 **Noul.** A yes/no question. Answers `noul`, the probability of yes.
 
