@@ -434,7 +434,8 @@ float noise on both backends. In bf16 (the weights as published, MLX's default) 
 in bf16, its own default, is as far from its float32 reading. Against that bf16 runtime, torch bf16 gives the
 same probabilities (1.5e-7 on d3-edge) and MLX bf16 is 2.7e-2 (d3-edge) / 3.0e-2 (d3-lite) away, the same answer
 on 61/62 and 62/62 questions. MLX float32 is measured with the weights cast to float32 as they are read (mlx-lm
-adds 1 to Qwen3.5's norm weights while loading, in the stored dtype).
+adds 1 to Qwen3.5's norm weights while loading, in the stored dtype). The script's default tolerance follows
+the dtype: 5e-3 in float32, 5e-2 in bf16.
 
 ## Laya
 

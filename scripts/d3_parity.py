@@ -195,13 +195,18 @@ def main() -> int:
     ap.add_argument("--dtype", default="float32", help="jul's torch dtype (default float32)")
     ap.add_argument("--mlx-dtype", choices=("stored", "float32"), default="stored",
                     help="mlx: the weights as stored (bf16) or cast to float32")
-    ap.add_argument("--tolerance", type=float, default=5e-3, help="largest allowed probability gap")
+    ap.add_argument("--tolerance", type=float,
+                    help="largest allowed probability gap (default: 5e-3 when jul reads in float32, "
+                         "5e-2 in bf16, where the runtime's own bf16 is ~2e-2 from its float32 reading)")
     ap.add_argument("--reference-dtype", choices=("float32", "bfloat16"), default="float32",
                     help="the runtime's dtype (default float32; bfloat16 is its own default)")
     ap.add_argument("--save-reference", metavar="JSON", help="run the runtime only and save its probabilities")
     ap.add_argument("--reference", metavar="JSON", help="compare jul with probabilities saved by --save-reference")
     ap.add_argument("--out", help="the comparison, per question (ids and numbers only)")
     a = ap.parse_args()
+    if a.tolerance is None:
+        f32 = a.mlx_dtype == "float32" if a.backend == "mlx" else a.dtype in ("float32", "fp32")
+        a.tolerance = 5e-3 if f32 else 5e-2
     cases = load_items(a.items)
 
     if a.reference:
