@@ -47,7 +47,16 @@ network at all.
   rest to a human.
 - Small and fast: 2.6 GB and 55 ms per decision on a Mac. `f2llm-1.7b` (converted
   locally, not published yet) fits in 1 GB and answers in 24 ms.
-- Replaceable model: we measured 18, and `jul models add` wires in a new one without touching your code.
+- Replaceable model: we measured 18, and `jul models add` wires in a new one without touching your code,
+  including other open decision models (Kev and Strands Decider checkpoints, the letter-readout models JevK5,
+  plumb-4b, Quyet and spark-s1, each read as its own runtime reads it) and Laya on its own runtime.
+- Measured on your own rows: `jul bench test.jsonl --models fast,accurate,typesafe` answers them with every
+  model you name, local or remote (Jev, Ollama, Clef, any System One URL), and says which one to pick.
+- Local first, remote when unsure: `jul serve --escalate-to typesafe` (or `jul.Escalation`) answers locally
+  and sends only the questions below a confidence bar to a bigger decider.
+- Long inputs are never cut silently: a cut is logged and counted in `usage.truncated_tokens`, and
+  `on_long="error"` refuses a text longer than the model reads
+  ([input limits](https://github.com/usejul/jul/blob/main/docs/models.md#input-limits)).
 - Tunable when you have labels: `autotune(...)` takes the default model from 0.857 to 0.897 with 1000
   examples, and keeps the head only if it beats zero-shot.
 - Drop-in for the Jev SDK: change the import and the same code runs on your machines. `jul serve`
@@ -226,8 +235,11 @@ adapters leave untouched (switched off, the features are the same): its numbers.
 reading mixes in the adapters; the Jev benchmark has not been rerun there yet.
 
 To use another model, run `jul models add <name> --repo <hf-repo>`. It fits the layer, center and
-temperature on the dev sets. The 18 models we measured, encoders, decision models and every setting
-are listed in [docs/models.md](https://github.com/usejul/jul/blob/main/docs/models.md).
+temperature on the dev sets; a decision model (a `decision.json`, a Strands Decider checkpoint, a
+letter-readout model) brings its own format and is read as is. The 18 models we measured, encoders, decision
+models, Laya, embeddings APIs and every setting are listed in
+[docs/models.md](https://github.com/usejul/jul/blob/main/docs/models.md); how to pick among them, in
+[docs/hub.md](https://github.com/usejul/jul/blob/main/docs/hub.md).
 
 ## Decisions inside an AWS Lambda
 
@@ -243,13 +255,14 @@ ships only the model(s) the questions need. Step by step, with the AWS CLI or CD
 ## Documentation
 
 - [Installation](https://github.com/usejul/jul/blob/main/docs/installation.md): backends, devices, batching, `jul setup`
-- [Models](https://github.com/usejul/jul/blob/main/docs/models.md): presets, the 18 models measured, `jul models add`
+- [The hub](https://github.com/usejul/jul/blob/main/docs/hub.md): every model family, backend and remote decider, and how to pick
+- [Models](https://github.com/usejul/jul/blob/main/docs/models.md): presets, the 18 models measured, decision models, Laya, input limits, `jul models add`
 - [AWS Lambda](https://github.com/usejul/jul/blob/main/docs/aws-lambda.md): a tuned decision in a Lambda function, step by step (CLI or CDK)
 - [Adapting to your data](https://github.com/usejul/jul/blob/main/docs/tuning.md): `Context`, `autotune(...)`, hybrid heads, `jul synth`
 - [Deployment](https://github.com/usejul/jul/blob/main/docs/deployment.md): `jul pack`, ONNX bundles, AWS Lambda
-- [Serving over HTTP](https://github.com/usejul/jul/blob/main/docs/serve.md): `jul serve`
+- [Serving over HTTP](https://github.com/usejul/jul/blob/main/docs/serve.md): `jul serve`, escalation to Jev, Clef or any System One server
 - [Telemetry](https://github.com/usejul/jul/blob/main/docs/telemetry.md): opt-in OpenTelemetry metrics and events, named after Claude Code's
-- [Command line](https://github.com/usejul/jul/blob/main/docs/cli.md): every command and file format
+- [Command line](https://github.com/usejul/jul/blob/main/docs/cli.md): every command and file format, `jul bench` on your own data
 - [Benchmarks](https://github.com/usejul/jul/blob/main/docs/benchmarks.md): full results and how to reproduce them
 - [Development](https://github.com/usejul/jul/blob/main/docs/development.md) and [Publishing](https://github.com/usejul/jul/blob/main/docs/publishing.md)
 

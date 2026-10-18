@@ -17,7 +17,8 @@ from jul import (TypeSafeClient, AsyncTypeSafeClient,            # the client
 
 ```python
 TypeSafeClient(model=None, context=None, method=None, one_word_only=False, backend=None,
-               context_home=None, api_key=None, base_url=None, timeout=None, max_retries=None, **ignored)
+               context_home=None, api_key=None, base_url=None, timeout=None, max_retries=None,
+               on_long=None, **ignored)
 ```
 
 | Argument | Default | What it does |
@@ -28,6 +29,7 @@ TypeSafeClient(model=None, context=None, method=None, one_word_only=False, backe
 | `one_word_only` | `False` | one prompt instead of two: faster, a little less accurate |
 | `backend` | `$JUL_BACKEND`, else `mlx` on Apple Silicon, else `torch` | `"mlx"`, `"torch"`, `"onnx"`, `"api"` |
 | `context_home` | `$JUL_HOME/contexts` | where named contexts are read and saved |
+| `on_long` | `$JUL_ON_LONG`, else `"cut"` | a state over a reading's limit: `"cut"` answers on what was read, `"error"` refuses the call ([input limits](models.md#input-limits)) |
 | `api_key`, `base_url`, `timeout`, `max_retries`, … | — | Jev's remote arguments: accepted and ignored |
 
 Constructing a client loads nothing and needs no backend installed. The model loads on the first call and
@@ -35,7 +37,7 @@ stays in memory; only one model is held at a time (asking another one drops the 
 
 | Member | What it does |
 | --- | --- |
-| `system_one(state, questions, context=None, model=None, method=None, route_above=None, **ignored)` | answers every question about one state, returns a `SystemOneResponse` |
+| `system_one(state, questions, context=None, model=None, method=None, route_above=None, on_long=None, **ignored)` | answers every question about one state, returns a `SystemOneResponse` |
 | `autotune(context, questions, labeled, model=None, save=True, features="vector", formulations=None)` | trains a head per question, returns `{name: TuningReport}`; see [below](#autotune) |
 | `model` | the preset name in use |
 | `backend` | the backend, resolved on first access |
@@ -52,11 +54,12 @@ stays in memory; only one model is held at a time (asking another one drops the 
 | `model` | another preset for this call (loads it, drops the previous one) |
 | `method` | overrides the reading for this call |
 | `route_above` | decision models only: above this many options, read as vectors; `0` disables it |
+| `on_long` | overrides the client's `on_long` for this call: `"cut"` or `"error"` |
 | `response_model`, `retry`, `extra_body`, … | Jev's arguments: accepted and ignored |
 
 Raises `ValueError` for an empty `questions`, an unknown `model=` passed to the call (the constructor raises
-it for its own) or a `Score` with fewer than two levels,
-`TypeError` for a question that is not one of the three types.
+it for its own) or a `Score` with fewer than two levels, `jul.truncation.InputTooLong` (a `ValueError`) for a
+state over a reading's limit with `on_long="error"`, `TypeError` for a question that is not one of the three types.
 
 ## AsyncTypeSafeClient
 
@@ -120,7 +123,9 @@ Probabilities are rounded to 4 decimals. Each answer has `as_dict()`, which adds
 ### Usage
 
 `input_tokens` (tokens fed to the model for this call), `output_tokens` (always 0: nothing is generated),
-`total_tokens`. With `--backend api`, the counts are characters.
+`total_tokens`, and `truncated_tokens`: the largest cut of the call, the tokens a reading dropped to fit its
+limit (0 when everything was read; each cut is also logged on the `jul.truncation` logger, see
+[input limits](models.md#input-limits)). With `--backend api`, the counts are characters.
 
 ## Context
 
@@ -240,6 +245,7 @@ Presets you add live in `~/.jul/presets/<name>@<backend>.json`; `jul models` lis
 | Exception | When |
 | --- | --- |
 | `ValueError` | unknown model or backend, empty questions, a `Score` with one level, a model not fitted for this backend |
+| `jul.truncation.InputTooLong` | a `ValueError`: the state is over a reading's limit and `on_long="error"`; `.reading`, `.limit`, `.over` say which and by how much |
 | `TypeError` | a question that is not `Choice`, `Noul` or `Score`, a context of the wrong type |
 | `ImportError` | no backend installed (`pip install "jul[mlx]"` or `"jul[torch]"`) |
 | `FileNotFoundError` | a context name that was never saved |

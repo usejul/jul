@@ -60,8 +60,12 @@ and 403 for a missing one.
 
 All optional, and ignored by a Jev client:
 
-- in the request, `context` (a saved context, with its tuned heads), `method` and `route_above`, as
-  in `system_one`; a choice's `criteria` may also be a plain list of keys, as in the library;
+- in the request, `context` (a saved context, with its tuned heads), `method`, `route_above` and `on_long`,
+  as in `system_one`; a choice's `criteria` may also be a plain list of keys, as in the library.
+  `"on_long": "error"` refuses a state over the model's input limit with a 400 that names the reading and
+  its limit, instead of answering on its beginning ([input limits](models.md#input-limits));
+- in `usage`, `truncated_tokens`: the tokens dropped to fit a reading's limit (0 when nothing was cut). The
+  server also prints each cut;
 - in the response, a `jul` object with the latency;
 - the `/health` route and the `/v1/classify` alias.
 
