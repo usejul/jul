@@ -28,13 +28,7 @@ class _StopForward(Exception):
 _MLX_MODEL_TYPE = {"qwen3_5_text": "qwen3_5"}
 
 
-def _rope_fix(repo: str) -> dict | None:
-    """Overrides for mlx-lm's reading of a transformers config.
-
-    transformers 5 writes the RoPE base under `rope_parameters`; mlx-lm reads `rope_theta` and silently falls
-    back to 10000 when it is missing, which gives wrong answers without any error: pass the right value when a
-    converted config has only the new key. And a text-only model type mlx-lm does not list is mapped to its
-    family's (`_MLX_MODEL_TYPE`)."""
+def _config(repo: str) -> dict | None:
     path = Path(repo) / "config.json"
     if not path.exists():
         # a Hub repo: the cached config, else fetch that one file (1 KB, before the weights)
@@ -44,7 +38,19 @@ def _rope_fix(repo: str) -> dict | None:
             path = Path(cached if isinstance(cached, str) else hf_hub_download(repo, "config.json"))
         except Exception:
             return None
-    config = json.loads(path.read_text())
+    return json.loads(path.read_text())
+
+
+def _rope_fix(repo: str) -> dict | None:
+    """Overrides for mlx-lm's reading of a transformers config.
+
+    transformers 5 writes the RoPE base under `rope_parameters`; mlx-lm reads `rope_theta` and silently falls
+    back to 10000 when it is missing, which gives wrong answers without any error: pass the right value when a
+    converted config has only the new key. And a text-only model type mlx-lm does not list is mapped to its
+    family's (`_MLX_MODEL_TYPE`)."""
+    config = _config(repo)
+    if config is None:
+        return None
     fix = {}
     theta = (config.get("rope_parameters") or {}).get("rope_theta")
     if theta and "rope_theta" not in config:
@@ -52,6 +58,59 @@ def _rope_fix(repo: str) -> dict | None:
     if config.get("model_type") in _MLX_MODEL_TYPE:
         fix["model_type"] = _MLX_MODEL_TYPE[config["model_type"]]
     return fix or None
+
+
+def _bare_multimodal(config: dict | None) -> bool:
+    """A multimodal base model saved without a head (Decision 3.0's `Qwen3_5Model`): its text weights are
+    named `language_model.*`, where mlx-lm expects the `model.language_model.*` of a full checkpoint."""
+    archs = (config or {}).get("architectures") or []
+    return bool(archs) and all(a.endswith("Model") for a in archs) and "text_config" in config
+
+
+def _load(repo: str, model_config: dict | None):
+    """mlx_lm.load, with the text weights of a bare multimodal base model renamed (vision tower left out)."""
+    if not _bare_multimodal(_config(repo)):
+        return load(repo, model_config=model_config)
+    from huggingface_hub import snapshot_download
+    from mlx_lm.utils import _get_classes, load_model, load_tokenizer
+
+    path = Path(repo) if Path(repo).is_dir() else Path(snapshot_download(
+        repo, allow_patterns=["*.json", "model*.safetensors", "*.txt", "*.jinja", "tokenizer*"]))
+
+    def classes(config: dict):
+        model_class, args_class = _get_classes(config)
+
+        class Bare(model_class):
+            def __init__(self, args):
+                super().__init__(args)
+                _layer_types(self, model_class)
+
+            def sanitize(self, weights):
+                weights = {("model." + k if k.startswith("language_model.") else k): v
+                           for k, v in weights.items() if not k.startswith("visual.")}
+                return super().sanitize(weights)
+        return Bare, args_class
+
+    model, config = load_model(path, model_config=model_config, get_model_classes=classes)
+    return model, load_tokenizer(path, eos_token_ids=config.get("eos_token_id"))
+
+
+def _layer_types(model, model_class) -> None:
+    """Lay the layers out as the config's `layer_types` says. mlx-lm's Qwen3.5 places a full-attention layer
+    every `full_attention_interval` layers; Decision 3.0's d3-edge has its own order (linear, linear, full,
+    linear, linear, full, then full only)."""
+    import importlib
+    lm = getattr(model, "language_model", None)
+    text, args = getattr(lm, "model", None), getattr(lm, "args", None)
+    types = (getattr(model.args, "text_config", None) or {}).get("layer_types")
+    if not types or text is None or not hasattr(args, "full_attention_interval"):
+        return
+    if [not layer.is_linear for layer in text.layers] == [t == "full_attention" for t in types]:
+        return
+    decoder = importlib.import_module(model_class.__module__).DecoderLayer
+    every = args.full_attention_interval    # DecoderLayer reads its index only to pick its kind
+    text.layers = [decoder(args, every - 1 if t == "full_attention" else 0) for t in types]
+    text.fa_idx, text.ssm_idx = types.index("full_attention"), types.index("linear_attention")
 
 
 class _Tap:
@@ -91,7 +150,7 @@ class MLXBackbone(Backbone):
 
     def __init__(self, name: str, backend: str | None = None):
         super().__init__(name)
-        self.model, self.tokenizer = load(self.repo, model_config=_rope_fix(self.repo))
+        self.model, self.tokenizer = _load(self.repo, _rope_fix(self.repo))
         layers = self.model.layers
         for i, block in enumerate(layers):
             layers[i] = _Tap(block, i, self)
@@ -161,6 +220,29 @@ class MLXBackbone(Backbone):
                 for c in prefix.cache:
                     if c.offset > prefix.n:
                         c.trim(c.offset - prefix.n)
+
+    def last_state(self, tokens, causal: bool = True) -> np.ndarray:
+        self._want, self._stop_at = set(), None
+        ids = mx.array(tokens)[None]
+        if causal:
+            h = self._inner(ids)
+        else:
+            # d3_runtime.PromptEncoder: every layer with no mask and no cache, so the full-attention layers
+            # see the whole prompt and the linear-attention ones run their causal scan from a zero state
+            inner = self._inner
+            if not all(hasattr(layer, "is_linear") for layer in inner.layers):
+                raise ValueError(f"{self.name}: non-causal attention needs linear and full attention layers "
+                                 "(Qwen3.5)")
+            h = inner.embed_tokens(ids)
+            for layer in inner.layers:
+                h = layer(h, mask=None, cache=None)
+            h = inner.norm(h)
+        last = h[0, -1].astype(mx.float32)
+        mx.eval(last)
+        # every prompt has its own length: MLX would keep the freed buffers of each one (GBs over a few
+        # thousand-token prompts)
+        mx.clear_cache()
+        return np.array(last)
 
     def _restored(self, snapshot):
         cache = make_prompt_cache(self.model)

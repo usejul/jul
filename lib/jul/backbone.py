@@ -149,6 +149,12 @@ class Backbone:
         method (jul/decision.py)."""
         raise NotImplementedError
 
+    def last_state(self, tokens: list[int], causal: bool = True) -> np.ndarray:
+        """(d,) float32: the last token's hidden state after the final norm. `causal=False` lets the
+        full-attention layers see the whole input (no causal mask), the linear-attention layers (Gated
+        DeltaNet) staying causal, as Decision 3.0 models are run (jul/letter_models.py, format d3)."""
+        raise NotImplementedError(f"the {self.backend} backend has no last_state: use torch or mlx")
+
     @property
     def model_dir(self) -> Path:
         """Local directory of the weights (downloaded on first access for a Hub repo)."""

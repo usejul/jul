@@ -432,7 +432,7 @@ ul.mac li::before { content: ""; position: absolute; left: 0; top: .55em; width:
           <p>Run a model, or route to a server. Same <code>Choice</code> / <code>Noul</code> / <code>Score</code>
           calls, same response, whatever answers.</p>
           <div class="chips">
-            <span>Hugging Face</span><span>Kev models</span><span>Strands Decider</span><span>JevK5 · Quyet · spark-s1</span><span>Laya</span><span>Encoders · ONNX</span>
+            <span>Hugging Face</span><span>Kev models</span><span>Strands Decider</span><span>JevK5 · Quyet · spark-s1</span><span>Decision 3.0</span><span>Laya</span><span>Encoders · ONNX</span>
             <span>Ollama</span><span>OpenAI</span><span>Mistral</span><span>Jev</span><span>Clef</span><span>your fine-tune</span>
           </div>
         </div>
@@ -476,7 +476,7 @@ model="fast"       <span class="dim"># 2B · 1.4 GB</span></pre>
           <tr><th>Encoders<small>e5, BERT, XLM-R, jul-decision-e5-small</small></th><td class="n"></td><td class="y"></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="y"></td></tr>
           <tr><th>Decision models<small>Kev format, jul-decision-minicpm5-2b</small></th><td class="y"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="n"></td></tr>
           <tr><th>Strands Decider<small>converted once, then a decision model</small></th><td class="q"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="q"></td><td class="n"></td></tr>
-          <tr><th>Letter-readout models<small>JevK5, plumb-4b, Quyet, spark-s1</small></th><td class="y"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
+          <tr><th>Letter-readout models<small>JevK5, plumb-4b, Quyet, spark-s1, Decision 3.0 (d3-edge, d3-lite)</small></th><td class="y"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
           <tr><th>Contrastive heads<small>CLM-8B</small></th><td class="y"></td><td class="y"></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="n"></td></tr>
           <tr><th>Embeddings APIs<small>Ollama, OpenAI, Mistral, Voyage</small></th><td class="n"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="q"></td><td class="q"></td></tr>
           <tr><th>Laya<small>its own runtime</small></th><td class="n"></td><td class="y"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td></tr>
@@ -601,7 +601,7 @@ client.autotune("tickets", {"team": team}, labeled)</pre>
         <li><b>Bench against the cloud.</b> <code>jul bench</code> puts Jev, Ollama, Clef or any System One URL next to your local models.</li>
         <li><b>Cascades, measured.</b> <code>--escalate-to</code>: accuracy of the pair and share of questions sent out.</li>
         <li><b>A new <code>fast</code>.</b> A decision model trained on human-written decisions.</li>
-        <li><b>Other open decision models.</b> Strands Decider checkpoints, and JevK5, plumb-4b, Quyet and spark-s1 read at their option letters, as their own runtimes read them. <a href="docs/models.html#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1">How →</a></li>
+        <li><b>Other open decision models.</b> Strands Decider checkpoints, and JevK5, plumb-4b, Quyet, spark-s1 and Decision 3.0 read at their option letters, as their own runtimes read them. <a href="docs/models.html#letter-readout-decision-models-jevk5-plumb-quyet-spark-s1-decision-30">How →</a></li>
         <li><b>No silent cut.</b> A text longer than the model reads is logged and counted in <code>usage.truncated_tokens</code>; <code>on_long="error"</code> refuses it. <a href="docs/models.html#input-limits">Limits →</a></li>
         <li><b>Telemetry, opt-in.</b> <code>JUL_ENABLE_TELEMETRY=1</code> sends metrics and events to your OpenTelemetry collector, local and remote deciders alike. Off by default. <a href="docs/telemetry.html">How →</a></li>
       </ul>

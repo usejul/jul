@@ -203,7 +203,7 @@ def letters_preset(name: str, repo: str, backend: str, spec) -> Preset:
     return Preset(name=name, **repo_fields(backend, repo), backend=backend, formulations=(), tau=1.0,
                   latency_ms="?", quality=f"decision model (letter readout, {spec.format} prompt)",
                   method="letter-readout", letters=spec.to_dict(),
-                  notes=f"{spec.format} prompt, letters {spec.letters[:spec.max_options]}, temperature {temps}; "
+                  notes=f"{spec.format} prompt, letters {spec.shown_letters}, temperature {temps}; "
                         f"from {spec.source}")
 
 
